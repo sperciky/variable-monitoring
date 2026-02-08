@@ -17,6 +17,7 @@ const $select    = document.getElementById("select-export");
 const $btnClear  = document.getElementById("btn-clear-history");
 const $resActs   = document.getElementById("results-actions");
 const $btnSelUnused = document.getElementById("btn-select-unused");
+const $btnExport = document.getElementById("btn-export-results");
 const $gtmWarn   = document.getElementById("gtm-warning");
 const $btnHelp   = document.getElementById("btn-help");
 const $tutorial  = document.getElementById("tutorial-overlay");
@@ -415,9 +416,12 @@ function renderResults(result) {
     card.addEventListener("click", () => activateTab(card.dataset.tab));
   });
 
+  // Always show results actions bar (export is always available)
+  $resActs.classList.remove("hidden");
+
   // Show/hide "Select Unused Variables" button + GTM warning
   if (unusedVariables.length > 0) {
-    $resActs.classList.remove("hidden");
+    $btnSelUnused.classList.remove("hidden");
     if (!isOnGtmPage()) {
       $btnSelUnused.disabled = true;
       $btnSelUnused.title = "Navigate to tagmanager.google.com first";
@@ -428,7 +432,8 @@ function renderResults(result) {
       $gtmWarn.classList.add("hidden");
     }
   } else {
-    $resActs.classList.add("hidden");
+    $btnSelUnused.classList.add("hidden");
+    $gtmWarn.classList.add("hidden");
   }
 
   // Render tab panels
@@ -624,6 +629,108 @@ $btnSelUnused.addEventListener("click", async () => {
   setStatus(`Navigating to select ${variableNames.length} variables...`, "success");
   setTimeout(() => window.close(), 400);
 });
+
+// ---- Export Analysis Results -----------------------------------------
+$btnExport.addEventListener("click", () => {
+  if (!analysisResult) return;
+
+  const entry = getSelectedEntry();
+  const { unusedVariables, duplicateVariables, unusedTemplates } = analysisResult;
+
+  // Header info
+  const workspaceName = entry ? (entry.workspaceName || "N/A") : "N/A";
+  const containerName = getContainerName(entry);
+  const exportDate = entry ? new Date(entry.timestamp).toLocaleString() : new Date().toLocaleString();
+
+  const lines = [];
+  lines.push("GTM Variable Analysis Report");
+  lines.push("=".repeat(50));
+  lines.push(`Workspace:  ${workspaceName}`);
+  lines.push(`Container:  ${containerName}`);
+  lines.push(`Export date: ${exportDate}`);
+  lines.push("");
+
+  // 1. Unused Variables
+  lines.push("-".repeat(50));
+  lines.push(`UNUSED VARIABLES (${unusedVariables.length})`);
+  lines.push("-".repeat(50));
+  if (unusedVariables.length === 0) {
+    lines.push("  (none)");
+  } else {
+    for (const v of unusedVariables) {
+      lines.push(`  ${v.name}  [${v.typeName}, ID: ${v.variableId}]`);
+    }
+  }
+  lines.push("");
+
+  // 2. Duplicate Variables
+  const dupCategoryLabels = {
+    data_layer_duplicates: "Data Layer",
+    event_data_duplicates: "Event Data",
+    cookie_duplicates: "Cookie",
+    js_variable_duplicates: "JavaScript",
+    url_duplicates: "URL",
+    custom_template_duplicates: "Custom Template",
+    other_duplicates: "Other",
+  };
+  let dupGroupCount = 0;
+  for (const groups of Object.values(duplicateVariables)) {
+    dupGroupCount += groups.length;
+  }
+  lines.push("-".repeat(50));
+  lines.push(`DUPLICATE VARIABLES (${dupGroupCount} groups)`);
+  lines.push("-".repeat(50));
+  if (dupGroupCount === 0) {
+    lines.push("  (none)");
+  } else {
+    for (const [cat, groups] of Object.entries(duplicateVariables)) {
+      for (const group of groups) {
+        const catLabel = dupCategoryLabels[cat] || cat;
+        lines.push(`  [${catLabel}]`);
+        for (const v of group) {
+          lines.push(`    ${v.name}  [ID: ${v.variableId}]`);
+        }
+        lines.push("");
+      }
+    }
+  }
+
+  // 3. Unused Templates
+  lines.push("-".repeat(50));
+  lines.push(`UNUSED TEMPLATES (${unusedTemplates.length})`);
+  lines.push("-".repeat(50));
+  if (unusedTemplates.length === 0) {
+    lines.push("  (none)");
+  } else {
+    for (const t of unusedTemplates) {
+      lines.push(`  ${t.name}  [${t.category}, ID: ${t.templateId}${t.isGallery ? ", Gallery" : ""}]`);
+    }
+  }
+
+  // Build filename
+  const safeName = (containerName || "export").replace(/[^a-zA-Z0-9_-]/g, "_");
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const filename = `GTM_Analysis_${safeName}_${dateStr}.txt`;
+
+  // Download
+  const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  setStatus("Analysis exported to " + filename, "success");
+});
+
+function getContainerName(entry) {
+  if (!entry || !entry.containerData) return "N/A";
+  const cv = entry.containerData.containerVersion;
+  return (cv && cv.container && cv.container.name) || "N/A";
+}
 
 // ---- Utility --------------------------------------------------------
 function esc(s) {
