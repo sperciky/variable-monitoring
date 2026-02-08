@@ -385,12 +385,23 @@ class GTMAnalyzer:
             # URL Variable (type 'u')
             elif var_type == 'u':
                 component = key_info.get('component', 'UNSPECIFIED')
-                key = f"url|{component}"
+                # Include queryKey in the grouping key for QUERY components,
+                # so that variables extracting different query parameters
+                # (e.g., gclid vs fbclid vs msclkid) are not treated as duplicates
+                query_key = key_info.get('queryKey', '')
+                custom_url_source = key_info.get('customUrlSource', '')
+                if query_key:
+                    key = f"url|{component}|{query_key}"
+                elif custom_url_source:
+                    key = f"url|{component}|{custom_url_source}"
+                else:
+                    key = f"url|{component}"
                 variable_groups['url_duplicates'][key].append({
                     'name': var['name'],
                     'variableId': var['variableId'],
                     'type': var_type,
                     'component': component,
+                    'queryKey': query_key,
                     'formatValue': format_info
                 })
             
@@ -1559,9 +1570,16 @@ class GTMAnalyzer:
         if duplicates.get('url_duplicates'):
             print("\nURL VARIABLE DUPLICATES:")
             for i, group in enumerate(duplicates['url_duplicates'], 1):
-                print(f"\n  Duplicate Group {i} (Component: '{group[0].get('component', group[0].get('parameter', 'Unknown'))}'):")
+                component = group[0].get('component', group[0].get('parameter', 'Unknown'))
+                query_key = group[0].get('queryKey', '')
+                if query_key:
+                    print(f"\n  Duplicate Group {i} (Component: '{component}', Query Key: '{query_key}'):")
+                else:
+                    print(f"\n  Duplicate Group {i} (Component: '{component}'):")
                 for var in group:
                     print(f"    - {var['name']} (ID: {var['variableId']})")
+                    if var.get('queryKey'):
+                        print(f"      Query Key: {var['queryKey']}")
                     print_format_value(var.get('formatValue'))
         
         # Custom Template Duplicates
