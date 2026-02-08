@@ -80,8 +80,24 @@
       };
 
       // Accumulate in storage (newest first, capped at MAX_EXPORTS)
+      // Deduplicate by checking if an entry with the same meta already exists
+      // within the last 30 seconds (handles flush replays)
       chrome.storage.local.get({ exportHistory: [] }, function (result) {
         const history = result.exportHistory;
+
+        // Skip if a very recent entry has the same account+container+source
+        const dominated = history.length > 0 && history.some(function (h) {
+          return Math.abs(h.timestamp - entry.timestamp) < 30000 &&
+            h.accountId === entry.accountId &&
+            h.containerId === entry.containerId &&
+            h.sourceType === entry.sourceType &&
+            h.sourceId === entry.sourceId;
+        });
+        if (dominated) {
+          console.log(TAG, "Skipping duplicate entry (already in history)");
+          return;
+        }
+
         history.unshift(entry);
         if (history.length > MAX_EXPORTS) history.length = MAX_EXPORTS;
 
@@ -148,6 +164,21 @@
       }, "*");
     });
   }
+
+  // ---- Respond to ping from popup (health check) --------------------
+  if (isContextValid()) {
+    chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
+      if (msg.type === "ping") {
+        sendResponse({ ok: true });
+      }
+    });
+  }
+
+  // ---- Request pending exports from MAIN world buffer ---------------
+  // If the MAIN world script intercepted exports while this ISOLATED
+  // script was dead (extension reload), recover them now.
+  console.log(TAG, "Requesting pending exports from MAIN world buffer...");
+  window.postMessage({ type: "__gtm_monitor_flush_pending" }, "*");
 
   console.log(TAG, "All listeners registered, waiting for export data...");
 })();

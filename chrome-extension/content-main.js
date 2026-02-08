@@ -11,6 +11,13 @@
   const TAG = "[GTM Monitor MAIN]";
   console.log(TAG, "Interceptor script loaded at", window.location.href);
 
+  // ---- Pending export buffer (survives ISOLATED world invalidation) ---
+  // MAIN world persists as long as the page is alive, even if the extension
+  // reloads and the ISOLATED content script loses its context.
+  if (!window.__gtm_monitor_pending_exports) {
+    window.__gtm_monitor_pending_exports = [];
+  }
+
   // ---- Extract workspace name from the export dialog DOM ------------
   function getWorkspaceName() {
     try {
@@ -127,8 +134,8 @@
     const workspaceName = getWorkspaceName();
     console.log(TAG, "URL info:", urlInfo, "Workspace name:", workspaceName);
 
-    // Use postMessage to cross the MAIN→ISOLATED world boundary
-    window.postMessage({
+    // Build the message payload
+    var exportMsg = {
       type: "__gtm_monitor_export",
       containerData: JSON.stringify(containerData),
       meta: {
@@ -138,18 +145,40 @@
         sourceId: urlInfo.sourceId || "",
         workspaceName: workspaceName || "",
       },
-    }, "*");
+    };
+
+    // Buffer in global array so a freshly-injected ISOLATED script can recover it
+    window.__gtm_monitor_pending_exports.push(exportMsg);
+    // Keep buffer bounded (max 20)
+    if (window.__gtm_monitor_pending_exports.length > 20) {
+      window.__gtm_monitor_pending_exports.shift();
+    }
+    console.log(TAG, "Buffered export, pending count:", window.__gtm_monitor_pending_exports.length);
+
+    // Use postMessage to cross the MAIN→ISOLATED world boundary
+    window.postMessage(exportMsg, "*");
     console.log(TAG, "Posted message to ISOLATED world via postMessage");
   }
 
   // ==================================================================
-  // Navigate + select: triggered from ISOLATED world content script
-  // Navigates via AngularJS $location then selects variables
+  // Navigate + select & flush: triggered from ISOLATED world content script
   // ==================================================================
 
   window.addEventListener("message", function (e) {
     if (e.source !== window) return;
     if (!e.data) return;
+
+    // ---- Flush pending exports to a freshly-loaded ISOLATED script ----
+    if (e.data.type === "__gtm_monitor_flush_pending") {
+      var pending = window.__gtm_monitor_pending_exports || [];
+      console.log(TAG, "Flush requested, sending", pending.length, "pending exports");
+      for (var i = 0; i < pending.length; i++) {
+        window.postMessage(pending[i], "*");
+      }
+      // Clear buffer after flushing
+      window.__gtm_monitor_pending_exports = [];
+      return;
+    }
 
     if (e.data.type === "__gtm_monitor_navigate_and_select") {
       console.log(TAG, "Navigate-and-select received, hash:", e.data.hash,
