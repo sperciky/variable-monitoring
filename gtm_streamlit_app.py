@@ -284,12 +284,22 @@ function _ok(el) {
 // Auto-resize iframe to fit content
 (function(){
     function resize(){
+        var h = document.body.scrollHeight;
+        if (h < 10) return;
         try {
-            if (window.frameElement)
-                window.frameElement.style.height = document.documentElement.scrollHeight + 'px';
+            var frame = window.frameElement;
+            if (frame) {
+                frame.style.height = h + 'px';
+                // Streamlit wraps the iframe in a div — resize it too
+                if (frame.parentElement)
+                    frame.parentElement.style.height = h + 'px';
+            }
         } catch(e){}
     }
-    resize(); setTimeout(resize, 50); setTimeout(resize, 200);
+    resize();
+    setTimeout(resize, 100);
+    setTimeout(resize, 300);
+    setTimeout(resize, 800);
 })();
 </script>"""
 
@@ -402,7 +412,7 @@ def render_dashboard(data: dict):
                 items_html = "<ul style='padding-left:20px;'>" + "".join(
                     _make_copyable_item(item) for item in rec["items"]
                 ) + "</ul>"
-                _render_copyable_html(items_html, fallback_height=len(rec["items"]) * 38 + 20)
+                _render_copyable_html(items_html, fallback_height=len(rec["items"]) * 28 + 10)
 
     # ---- Charts ----
     st.markdown("## Variable Evaluation Impact")
@@ -498,7 +508,7 @@ def render_dashboard(data: dict):
                 f'</tr>'
             )
         tbl += '</tbody></table>'
-        _render_copyable_html(tbl, fallback_height=len(unused_vars) * 36 + 50)
+        _render_copyable_html(tbl, fallback_height=len(unused_vars) * 28 + 40)
 
     # ---- Duplicate variables detail ----
     duplicates = data.get("duplicate_variables", {})
@@ -529,7 +539,7 @@ def render_dashboard(data: dict):
                         f'<thead><tr style="border-bottom:2px solid #ddd;">{header}</tr></thead>'
                         f'<tbody>{rows}</tbody></table>'
                     )
-                    _render_copyable_html(tbl, fallback_height=len(group) * 36 + 50)
+                    _render_copyable_html(tbl, fallback_height=len(group) * 28 + 40)
 
     # ---- Download JSON report ----
     st.markdown("---")
