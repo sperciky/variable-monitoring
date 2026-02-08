@@ -199,95 +199,31 @@
   });
 
   function navigateAndSelect(hash, variableNames) {
-    var path = hash.replace(/^#/, "");
     var t0 = performance.now();
     function ts() { return "+" + Math.round(performance.now() - t0) + "ms"; }
 
-    console.log(TAG, ts(), "Navigate-and-select START, path:", path);
+    console.log(TAG, ts(), "Navigate-and-select START");
 
     // 1. Close any open GTM dialog/sheet that may block navigation
-    closeGtmDialogs();
-    console.log(TAG, ts(), "closeGtmDialogs() done");
-
-    // 2. Small delay for dialog close animation, then navigate
-    setTimeout(function () {
-      console.log(TAG, ts(), "Dialog close delay elapsed, calling doNavigate()");
-      doNavigate(path, hash);
-      console.log(TAG, ts(), "doNavigate() returned, waiting for URL change...");
-
-      // 3. Wait for the URL to actually reflect the target path, then select
-      waitForUrlChange(path, 10000).then(function () {
-        console.log(TAG, ts(), "URL confirmed, waiting for page render...");
-        setTimeout(function () {
-          console.log(TAG, ts(), "Render delay elapsed, starting selectVariablesOnPage()");
-          selectVariablesOnPage(variableNames, ts);
-        }, 250);
-      }).catch(function () {
-        console.warn(TAG, ts(), "URL did not change, retrying with hash fallback...");
-        window.location.hash = hash;
-        setTimeout(function () {
-          console.log(TAG, ts(), "Fallback delay elapsed, starting selectVariablesOnPage()");
-          selectVariablesOnPage(variableNames, ts);
-        }, 2000);
-      });
-    }, 150);
-  }
-
-  function closeGtmDialogs() {
-    // Close export sheet / any open GTM overlay
     var closeBtn = document.querySelector(
       ".gtm-sheet-header__close-button, " +
       ".gtm-dialog-header__close-button, " +
       "gtm-selective-export .gtm-sheet-header button"
     );
     if (closeBtn) {
-      console.log(TAG, "Closing open GTM dialog/sheet");
+      console.log(TAG, ts(), "Closing open GTM dialog/sheet");
       closeBtn.click();
-      return;
     }
-    // Fallback: press Escape to close any modal
-    document.dispatchEvent(new KeyboardEvent("keydown", {
-      key: "Escape", keyCode: 27, bubbles: true
-    }));
-  }
 
-  function doNavigate(path, hash) {
-    if (typeof angular !== "undefined") {
-      try {
-        var $injector = angular.element(document.body).injector();
-        if ($injector) {
-          $injector.invoke(["$location", "$timeout", function ($location, $timeout) {
-            $timeout(function () {
-              $location.url(path);
-            });
-          }]);
-          console.log(TAG, "Navigation triggered via AngularJS $timeout + $location.url()");
-          return;
-        }
-      } catch (err) {
-        console.warn(TAG, "AngularJS navigation failed, falling back to hash:", err);
-      }
-    }
-    window.location.hash = hash;
-  }
+    // 2. Small delay for dialog close, then navigate via hash (reliable from MAIN world)
+    setTimeout(function () {
+      console.log(TAG, ts(), "Setting window.location.hash");
+      window.location.hash = hash;
 
-  function waitForUrlChange(targetPath, timeout) {
-    return new Promise(function (resolve, reject) {
-      var elapsed = 0;
-      var interval = setInterval(function () {
-        var currentHash = window.location.hash || "";
-        // Check if the current hash contains the target path
-        if (currentHash.indexOf("/variables") >= 0 && currentHash.indexOf(targetPath) >= 0) {
-          clearInterval(interval);
-          resolve();
-        }
-        elapsed += 200;
-        if (elapsed >= timeout) {
-          clearInterval(interval);
-          reject(new Error("URL did not change to target path"));
-        }
-      }, 200);
-    });
+      // 3. Start selecting once the table appears
+      console.log(TAG, ts(), "Starting selectVariablesOnPage()");
+      selectVariablesOnPage(variableNames, ts);
+    }, 150);
   }
 
   async function selectVariablesOnPage(names, ts) {
@@ -309,9 +245,10 @@
       const totalRows = await waitForStableRowCount(8000);
       console.log(TAG, ts(), "Row count stabilized at", totalRows);
 
-      // 4. Click checkboxes for matching variable names
-      console.log(TAG, ts(), "Clicking checkboxes...");
-      let selected = 0;
+      // 4. Collect all checkboxes to click, then click in batches
+      //    (each click triggers an AngularJS digest cycle — batching reduces overhead)
+      console.log(TAG, ts(), "Finding checkboxes to click...");
+      const toClick = [];
       const rows = document.querySelectorAll("tr[gtm-table-row]");
       for (const row of rows) {
         const nameLink = row.querySelector("a.wd-variable-name");
@@ -320,12 +257,23 @@
         if (nameSet.has(varName)) {
           const checkbox = row.querySelector("gtm-table-row-checkbox i");
           if (checkbox && !checkbox.classList.contains("gtm-check-box-icon")) {
-            checkbox.click();
-            selected++;
+            toClick.push(checkbox);
           }
         }
       }
-      console.log(TAG, ts(), "DONE — Selected", selected, "of", names.length, "unused variables");
+      console.log(TAG, ts(), "Found", toClick.length, "checkboxes, clicking...");
+
+      // Click in batches of 10 with a small yield between batches
+      const BATCH = 10;
+      for (let i = 0; i < toClick.length; i += BATCH) {
+        for (let j = i; j < Math.min(i + BATCH, toClick.length); j++) {
+          toClick[j].click();
+        }
+        if (i + BATCH < toClick.length) {
+          await new Promise(function (r) { setTimeout(r, 0); });
+        }
+      }
+      console.log(TAG, ts(), "DONE — Selected", toClick.length, "of", names.length, "unused variables");
     } catch (err) {
       console.error(TAG, ts(), "Variable selection failed:", err);
     }
