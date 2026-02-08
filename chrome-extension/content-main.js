@@ -231,26 +231,18 @@
       });
     }
 
-    if (hadDialog && typeof angular !== "undefined") {
-      // Use AngularJS $timeout to defer navigation until after dialog close digest
-      try {
-        var $injector = angular.element(document.body).injector();
-        if ($injector) {
-          $injector.invoke(["$timeout", function ($timeout) {
-            $timeout(function () {
-              log("$timeout fired after dialog close digest");
-              doNavigateAndVerify();
-            });
-          }]);
-          return;
-        }
-      } catch (e) {
-        warn("AngularJS $timeout failed:", e);
-      }
+    if (hadDialog) {
+      // Wait for the dialog/sheet element to actually disappear from the DOM,
+      // rather than relying on $timeout which fires before Angular processes
+      // the close button click.
+      log("Waiting for dialog to disappear from DOM...");
+      waitForDialogClose(5000).then(function () {
+        log("Dialog closed, proceeding with navigation");
+        doNavigateAndVerify();
+      });
+    } else {
+      setTimeout(doNavigateAndVerify, 100);
     }
-
-    // No dialog or no Angular — use simple delay
-    setTimeout(doNavigateAndVerify, hadDialog ? 500 : 100);
   }
 
   function waitForUrlToContain(targetPath, timeout) {
@@ -271,6 +263,36 @@
         if (elapsed >= timeout) {
           clearInterval(interval);
           reject(new Error("URL did not change to " + targetPath + " within " + timeout + "ms (current: " + window.location.hash + ")"));
+        }
+      }, 100);
+    });
+  }
+
+  function waitForDialogClose(timeout) {
+    return new Promise(function (resolve) {
+      var selector = "gtm-selective-export, .gtm-sheet, .gtm-dialog";
+
+      // If no dialog element exists, resolve immediately
+      if (!document.querySelector(selector)) {
+        log("Dialog already gone");
+        resolve();
+        return;
+      }
+
+      var elapsed = 0;
+      var interval = setInterval(function () {
+        if (!document.querySelector(selector)) {
+          clearInterval(interval);
+          log("Dialog disappeared after", elapsed, "ms");
+          // Small extra delay for Angular to finish its post-removal digest
+          setTimeout(resolve, 200);
+          return;
+        }
+        elapsed += 100;
+        if (elapsed >= timeout) {
+          clearInterval(interval);
+          warn("Dialog did not close within", timeout, "ms, proceeding anyway");
+          resolve();
         }
       }, 100);
     });
@@ -382,16 +404,34 @@
       var el = document.querySelector(selector);
       if (el) { resolve(el); return; }
 
-      var observer = new MutationObserver(function () {
-        var found = document.querySelector(selector);
-        if (found) { observer.disconnect(); resolve(found); }
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-
-      setTimeout(function () {
-        observer.disconnect();
+      var timedOut = false;
+      var timer = setTimeout(function () {
+        timedOut = true;
+        if (observer) observer.disconnect();
         reject(new Error("Timeout waiting for " + selector));
       }, timeout);
+
+      var observer;
+      function startObserving() {
+        if (timedOut) return;
+        // Re-check after waiting for body
+        var found = document.querySelector(selector);
+        if (found) { clearTimeout(timer); resolve(found); return; }
+
+        observer = new MutationObserver(function () {
+          var found = document.querySelector(selector);
+          if (found) { observer.disconnect(); clearTimeout(timer); resolve(found); }
+        });
+        var root = document.body || document.documentElement;
+        observer.observe(root, { childList: true, subtree: true });
+      }
+
+      if (document.body) {
+        startObserving();
+      } else {
+        log("document.body not ready, waiting for DOMContentLoaded...");
+        document.addEventListener("DOMContentLoaded", startObserving);
+      }
     });
   }
 
