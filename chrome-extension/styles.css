@@ -196,6 +196,11 @@ body.detached {
 }
 .card__number { font-size: 22px; font-weight: 700; }
 .card__label { font-size: 11px; color: #5f6368; margin-top: 2px; }
+.card--clickable { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.card--clickable:hover { border-color: #bdc1c6; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+.card--active.card--danger  { border-color: #d93025; box-shadow: 0 0 0 2px rgba(217,48,37,.15); }
+.card--active.card--warning { border-color: #e37400; box-shadow: 0 0 0 2px rgba(227,116,0,.15); }
+.card--active.card--info    { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,.15); }
 .card--danger .card__number { color: #d93025; }
 .card--warning .card__number { color: #e37400; }
 .card--info .card__number { color: #1a73e8; }

@@ -306,7 +306,22 @@ class GTMAnalyzer:
                     info[label] = value
         
         return info if info else None
-    
+
+    def _default_value_key_part(self, key_info: dict) -> str:
+        """Build a stable string fragment for the default-value portion of a grouping key.
+        Variables with different setDefaultValue/defaultValue settings are NOT duplicates."""
+        if key_info.get('setDefaultValue') in ('true', True):
+            return f"|dv:{key_info.get('defaultValue', '')}"
+        return "|dv:none"
+
+    def _format_value_key_part(self, format_info) -> str:
+        """Build a stable string fragment for the formatValue portion of a grouping key.
+        Variables with different formatValue settings are NOT duplicates."""
+        if not format_info:
+            return "|fv:none"
+        parts = [f"{k}={v}" for k, v in sorted(format_info.items())]
+        return f"|fv:{';'.join(parts)}"
+
     def find_duplicate_variables(self) -> Dict[str, List[List[Dict]]]:
         """Find variables that reference the same data source"""
         duplicates = {
@@ -334,10 +349,12 @@ class GTMAnalyzer:
             
             # Extract formatValue info
             format_info = self.extract_format_value_info(format_value)
-            
+            dv_part = self._default_value_key_part(key_info)
+            fv_part = self._format_value_key_part(format_info)
+
             # Data Layer Variable (type 'v')
             if var_type == 'v' and 'name' in key_info:
-                key = f"datalayer|{key_info['name']}|v{key_info.get('dataLayerVersion', '2')}"
+                key = f"datalayer|{key_info['name']}|v{key_info.get('dataLayerVersion', '2')}{dv_part}{fv_part}"
                 variable_groups['data_layer_duplicates'][key].append({
                     'name': var['name'],
                     'variableId': var['variableId'],
@@ -350,7 +367,7 @@ class GTMAnalyzer:
             
             # Event Data Variable (type 'ed')
             elif var_type == 'ed' and 'keyPath' in key_info:
-                key = f"eventdata|{key_info['keyPath']}"
+                key = f"eventdata|{key_info['keyPath']}{dv_part}{fv_part}"
                 variable_groups['event_data_duplicates'][key].append({
                     'name': var['name'],
                     'variableId': var['variableId'],
@@ -362,7 +379,7 @@ class GTMAnalyzer:
             
             # Cookie Variable (type 'k')
             elif var_type == 'k' and 'name' in key_info:
-                key = f"cookie|{key_info['name']}"
+                key = f"cookie|{key_info['name']}{dv_part}{fv_part}"
                 variable_groups['cookie_duplicates'][key].append({
                     'name': var['name'],
                     'variableId': var['variableId'],
@@ -373,7 +390,7 @@ class GTMAnalyzer:
             
             # JavaScript Variable (type 'j')
             elif var_type == 'j' and 'name' in key_info:
-                key = f"jsvar|{key_info['name']}"
+                key = f"jsvar|{key_info['name']}{dv_part}{fv_part}"
                 variable_groups['js_variable_duplicates'][key].append({
                     'name': var['name'],
                     'variableId': var['variableId'],
@@ -391,11 +408,11 @@ class GTMAnalyzer:
                 query_key = key_info.get('queryKey', '')
                 custom_url_source = key_info.get('customUrlSource', '')
                 if query_key:
-                    key = f"url|{component}|{query_key}"
+                    key = f"url|{component}|{query_key}{dv_part}{fv_part}"
                 elif custom_url_source:
-                    key = f"url|{component}|{custom_url_source}"
+                    key = f"url|{component}|{custom_url_source}{dv_part}{fv_part}"
                 else:
-                    key = f"url|{component}"
+                    key = f"url|{component}{dv_part}{fv_part}"
                 variable_groups['url_duplicates'][key].append({
                     'name': var['name'],
                     'variableId': var['variableId'],
@@ -414,7 +431,7 @@ class GTMAnalyzer:
                         template_key_params.append(f"{param}:{key_info[param]}")
                 
                 if template_key_params:
-                    key = f"custom|{var_type}|{'|'.join(sorted(template_key_params))}"
+                    key = f"custom|{var_type}|{'|'.join(sorted(template_key_params))}{dv_part}{fv_part}"
                     variable_groups['custom_template_duplicates'][key].append({
                         'name': var['name'],
                         'variableId': var['variableId'],

@@ -377,19 +377,24 @@ function renderResults(result) {
 
   // Summary cards
   $summary.innerHTML = `
-    <div class="card card--danger">
+    <div class="card card--danger card--clickable" data-tab="unused-vars">
       <div class="card__number">${summary.unusedVariableCount}</div>
       <div class="card__label">Unused Variables</div>
     </div>
-    <div class="card card--warning">
+    <div class="card card--warning card--clickable" data-tab="duplicates">
       <div class="card__number">${summary.duplicateGroups}</div>
       <div class="card__label">Duplicate Groups</div>
     </div>
-    <div class="card card--info">
+    <div class="card card--info card--clickable" data-tab="unused-tpl">
       <div class="card__number">${summary.unusedTemplateCount}</div>
       <div class="card__label">Unused Templates</div>
     </div>
   `;
+
+  // Make summary cards clickable
+  $summary.querySelectorAll(".card--clickable").forEach(card => {
+    card.addEventListener("click", () => activateTab(card.dataset.tab));
+  });
 
   // Show/hide "Select Unused Variables" button
   if (unusedVariables.length > 0) {
@@ -416,6 +421,10 @@ function activateTab(tabId) {
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("tab--active", t.dataset.tab === tabId));
   panelIds.forEach(id => {
     document.getElementById(`panel-${id}`).classList.toggle("panel--active", id === tabId);
+  });
+  // Highlight the matching summary card
+  document.querySelectorAll(".card--clickable").forEach(c => {
+    c.classList.toggle("card--active", c.dataset.tab === tabId);
   });
 }
 
