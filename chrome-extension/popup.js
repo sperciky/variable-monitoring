@@ -420,7 +420,9 @@ function renderResults(result) {
   $resActs.classList.remove("hidden");
 
   // Show/hide "Select Unused Variables" button + GTM warning
-  if (unusedVariables.length > 0) {
+  // In detached window there's no attached tab, so the button is irrelevant
+  const isDetached = document.body.classList.contains("detached");
+  if (!isDetached && unusedVariables.length > 0) {
     $btnSelUnused.classList.remove("hidden");
     if (!isOnGtmPage()) {
       $btnSelUnused.disabled = true;
