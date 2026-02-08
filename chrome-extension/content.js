@@ -80,23 +80,15 @@
       };
 
       // Accumulate in storage (newest first, capped at MAX_EXPORTS)
-      // Deduplicate by checking if an entry with the same meta already exists
-      // within the last 30 seconds (handles flush replays)
+      // If same container+workspace already exists, replace with the new export
       chrome.storage.local.get({ exportHistory: [] }, function (result) {
-        const history = result.exportHistory;
-
-        // Skip if a very recent entry has the same account+container+source
-        const dominated = history.length > 0 && history.some(function (h) {
-          return Math.abs(h.timestamp - entry.timestamp) < 30000 &&
-            h.accountId === entry.accountId &&
+        // Remove any existing entry for the same container + workspace
+        const history = result.exportHistory.filter(function (h) {
+          return !(h.accountId === entry.accountId &&
             h.containerId === entry.containerId &&
             h.sourceType === entry.sourceType &&
-            h.sourceId === entry.sourceId;
+            h.sourceId === entry.sourceId);
         });
-        if (dominated) {
-          console.log(TAG, "Skipping duplicate entry (already in history)");
-          return;
-        }
 
         history.unshift(entry);
         if (history.length > MAX_EXPORTS) history.length = MAX_EXPORTS;
