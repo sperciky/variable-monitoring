@@ -9,22 +9,22 @@
 
 (function () {
   const TAG = "[GTM Monitor MAIN]";
+  var _scriptStart = performance.now();
+  function _ts() { return "[" + Math.round(performance.now() - _scriptStart) + "ms]"; }
+  function log() { console.log.apply(console, [TAG, _ts()].concat(Array.prototype.slice.call(arguments))); }
+  function warn() { console.warn.apply(console, [TAG, _ts()].concat(Array.prototype.slice.call(arguments))); }
+  function err() { console.error.apply(console, [TAG, _ts()].concat(Array.prototype.slice.call(arguments))); }
 
   // ---- Prevent duplicate initialization -----------------------------
-  // MAIN world scripts persist in the page JS context even after extension
-  // reload. If ensureContentScripts() re-injects this file, skip to avoid
-  // duplicate XHR patches and message listeners.
   if (window.__gtm_monitor_main_initialized) {
-    console.log(TAG, "Already initialized, skipping duplicate injection");
+    log("Already initialized, skipping duplicate injection");
     return;
   }
   window.__gtm_monitor_main_initialized = true;
 
-  console.log(TAG, "Interceptor script loaded at", window.location.href);
+  log("Interceptor script loaded at", window.location.href);
 
   // ---- Pending export buffer (survives ISOLATED world invalidation) ---
-  // MAIN world persists as long as the page is alive, even if the extension
-  // reloads and the ISOLATED content script loses its context.
   if (!window.__gtm_monitor_pending_exports) {
     window.__gtm_monitor_pending_exports = [];
   }
@@ -37,7 +37,6 @@
       );
       if (el) {
         const text = el.innerText.trim();
-        // "Export Default Workspace" → "Default Workspace"
         return text.replace(/^Export\s+/i, "") || text;
       }
     } catch (e) { /* ignore */ }
@@ -46,14 +45,12 @@
 
   // ---- Extract account/container/workspace IDs from the API URL -----
   function parseExportUrl(url) {
-    // .../api/accounts/218461/containers/55831269/workspaces/678/partialexport?hl=en
-    // .../api/accounts/218461/containers/55831269/versions/123/partialexport?hl=en
     const m = url.match(/\/api\/accounts\/(\d+)\/containers\/(\d+)\/(workspaces|versions)\/(\d+)\/partialexport/);
     if (!m) return {};
     return {
       accountId: m[1],
       containerId: m[2],
-      sourceType: m[3],   // "workspaces" or "versions"
+      sourceType: m[3],
       sourceId: m[4],
     };
   }
@@ -66,9 +63,8 @@
     this.__gtmMonUrl = url || "";
     this.__gtmMonMethod = method || "";
 
-    // Log all GTM API calls for debugging
     if (url && typeof url === "string" && url.includes("tagmanager.google.com/api")) {
-      console.log(TAG, "GTM API call:", method, url.substring(0, 150));
+      log("GTM API call:", method, url.substring(0, 150));
     }
 
     return _origXHROpen.apply(this, arguments);
@@ -78,14 +74,14 @@
     const url = this.__gtmMonUrl;
 
     if (url.includes("/partialexport")) {
-      console.log(TAG, "XHR partialexport intercepted:", this.__gtmMonMethod, url);
+      log("XHR partialexport intercepted:", this.__gtmMonMethod, url);
 
       this.addEventListener("load", function () {
-        console.log(TAG, "XHR response status:", this.status, "length:", (this.responseText || "").length);
+        log("XHR response status:", this.status, "length:", (this.responseText || "").length);
         try {
           processExportResponse(this.responseText, url, "XHR");
         } catch (e) {
-          console.error(TAG, "XHR processing error:", e);
+          err("XHR processing error:", e);
         }
       });
     }
@@ -100,16 +96,16 @@
     const url = typeof req === "string" ? req : (req && req.url) || "";
 
     if (url.includes("/partialexport")) {
-      console.log(TAG, "fetch() partialexport intercepted:", url);
+      log("fetch() partialexport intercepted:", url);
 
       return _origFetch.apply(this, arguments).then(function (response) {
         const clone = response.clone();
         clone.text().then(function (text) {
-          console.log(TAG, "fetch response status:", response.status, "length:", text.length);
+          log("fetch response status:", response.status, "length:", text.length);
           try {
             processExportResponse(text, url, "fetch");
           } catch (e) {
-            console.error(TAG, "fetch processing error:", e);
+            err("fetch processing error:", e);
           }
         });
         return response;
@@ -120,32 +116,29 @@
 
   // ---- Common response processor ------------------------------------
   function processExportResponse(text, requestUrl, source) {
-    // Google APIs prefix with )]}',\n — strip it
     const jsonStr = text.replace(/^\)\]\}',?\s*/, "");
-    console.log(TAG, "Stripped prefix, parsing JSON from", source, "first 200 chars:", jsonStr.substring(0, 200));
+    log("Stripped prefix, parsing JSON from", source, "first 200 chars:", jsonStr.substring(0, 200));
 
     const parsed = JSON.parse(jsonStr);
-    console.log(TAG, "Parsed top-level keys:", Object.keys(parsed));
+    log("Parsed top-level keys:", Object.keys(parsed));
 
     const wrapper = parsed.default || parsed;
-    console.log(TAG, "Wrapper keys:", Object.keys(wrapper));
+    log("Wrapper keys:", Object.keys(wrapper));
 
     const exportedJson = wrapper.exportedContainerJson;
     if (!exportedJson) {
-      console.warn(TAG, "No exportedContainerJson found in response");
+      warn("No exportedContainerJson found in response");
       return;
     }
 
-    console.log(TAG, "exportedContainerJson length:", exportedJson.length);
+    log("exportedContainerJson length:", exportedJson.length);
     const containerData = JSON.parse(exportedJson);
-    console.log(TAG, "Parsed container data, keys:", Object.keys(containerData));
+    log("Parsed container data, keys:", Object.keys(containerData));
 
-    // Gather metadata
     const urlInfo = parseExportUrl(requestUrl);
     const workspaceName = getWorkspaceName();
-    console.log(TAG, "URL info:", urlInfo, "Workspace name:", workspaceName);
+    log("URL info:", urlInfo, "Workspace name:", workspaceName);
 
-    // Build the message payload
     var exportMsg = {
       type: "__gtm_monitor_export",
       containerData: JSON.stringify(containerData),
@@ -158,17 +151,14 @@
       },
     };
 
-    // Buffer in global array so a freshly-injected ISOLATED script can recover it
     window.__gtm_monitor_pending_exports.push(exportMsg);
-    // Keep buffer bounded (max 20)
     if (window.__gtm_monitor_pending_exports.length > 20) {
       window.__gtm_monitor_pending_exports.shift();
     }
-    console.log(TAG, "Buffered export, pending count:", window.__gtm_monitor_pending_exports.length);
+    log("Buffered export, pending count:", window.__gtm_monitor_pending_exports.length);
 
-    // Use postMessage to cross the MAIN→ISOLATED world boundary
     window.postMessage(exportMsg, "*");
-    console.log(TAG, "Posted message to ISOLATED world via postMessage");
+    log("Posted message to ISOLATED world via postMessage");
   }
 
   // ==================================================================
@@ -179,30 +169,25 @@
     if (e.source !== window) return;
     if (!e.data) return;
 
-    // ---- Flush pending exports to a freshly-loaded ISOLATED script ----
     if (e.data.type === "__gtm_monitor_flush_pending") {
       var pending = window.__gtm_monitor_pending_exports || [];
-      console.log(TAG, "Flush requested, sending", pending.length, "pending exports");
+      log("Flush requested, sending", pending.length, "pending exports");
       for (var i = 0; i < pending.length; i++) {
         window.postMessage(pending[i], "*");
       }
-      // Clear buffer after flushing
       window.__gtm_monitor_pending_exports = [];
       return;
     }
 
     if (e.data.type === "__gtm_monitor_navigate_and_select") {
-      console.log(TAG, "Navigate-and-select received, hash:", e.data.hash,
+      log("Navigate-and-select received, hash:", e.data.hash,
         "variables:", e.data.variableNames.length);
       navigateAndSelect(e.data.hash, e.data.variableNames);
     }
   });
 
   function navigateAndSelect(hash, variableNames) {
-    var t0 = performance.now();
-    function ts() { return "+" + Math.round(performance.now() - t0) + "ms"; }
-
-    console.log(TAG, ts(), "Navigate-and-select START");
+    log("Navigate-and-select START");
 
     // 1. Close any open GTM dialog/sheet that may block navigation
     var closeBtn = document.querySelector(
@@ -211,43 +196,41 @@
       "gtm-selective-export .gtm-sheet-header button"
     );
     if (closeBtn) {
-      console.log(TAG, ts(), "Closing open GTM dialog/sheet");
+      log("Closing open GTM dialog/sheet");
       closeBtn.click();
     }
 
     // 2. Small delay for dialog close, then navigate via hash (reliable from MAIN world)
     setTimeout(function () {
-      console.log(TAG, ts(), "Setting window.location.hash");
+      log("Setting window.location.hash");
       window.location.hash = hash;
 
       // 3. Start selecting once the table appears
-      console.log(TAG, ts(), "Starting selectVariablesOnPage()");
-      selectVariablesOnPage(variableNames, ts);
+      log("Starting selectVariablesOnPage()");
+      selectVariablesOnPage(variableNames);
     }, 150);
   }
 
-  async function selectVariablesOnPage(names, ts) {
-    if (!ts) { var _t0 = performance.now(); ts = function() { return "+" + Math.round(performance.now() - _t0) + "ms"; }; }
+  async function selectVariablesOnPage(names) {
     const nameSet = new Set(names);
     try {
       // 1. Wait for the variables table to appear
-      console.log(TAG, ts(), "Waiting for variables table...");
+      log("Waiting for variables table...");
       await waitForElement("tr[gtm-table-row]", 15000);
-      console.log(TAG, ts(), "Table rows found");
+      log("Table rows found");
 
       // 2. Set pagination to ALL so every variable is visible
-      console.log(TAG, ts(), "Setting pagination to ALL...");
+      log("Setting pagination to ALL...");
       await setPaginationToAll();
-      console.log(TAG, ts(), "Pagination done");
+      log("Pagination done");
 
       // 3. Wait for row count to stabilize (all rows rendered)
-      console.log(TAG, ts(), "Waiting for row count to stabilize...");
+      log("Waiting for row count to stabilize...");
       const totalRows = await waitForStableRowCount(8000);
-      console.log(TAG, ts(), "Row count stabilized at", totalRows);
+      log("Row count stabilized at", totalRows);
 
       // 4. Collect all checkboxes to click, then click in batches
-      //    (each click triggers an AngularJS digest cycle — batching reduces overhead)
-      console.log(TAG, ts(), "Finding checkboxes to click...");
+      log("Finding checkboxes to click...");
       const toClick = [];
       const rows = document.querySelectorAll("tr[gtm-table-row]");
       for (const row of rows) {
@@ -261,7 +244,7 @@
           }
         }
       }
-      console.log(TAG, ts(), "Found", toClick.length, "checkboxes, clicking...");
+      log("Found", toClick.length, "checkboxes, clicking...");
 
       // Click in batches of 10 with a small yield between batches
       const BATCH = 10;
@@ -273,23 +256,21 @@
           await new Promise(function (r) { setTimeout(r, 0); });
         }
       }
-      console.log(TAG, ts(), "DONE — Selected", toClick.length, "of", names.length, "unused variables");
-    } catch (err) {
-      console.error(TAG, ts(), "Variable selection failed:", err);
+      log("DONE — Selected", toClick.length, "of", names.length, "unused variables");
+    } catch (e) {
+      err("Variable selection failed:", e);
     }
   }
 
   function setPaginationToAll() {
     return new Promise(function (resolve) {
       const select = document.querySelector("gtm-pagination select");
-      if (!select) { console.warn(TAG, "Pagination select not found"); resolve(); return; }
+      if (!select) { warn("Pagination select not found"); resolve(); return; }
 
-      // Already ALL?
-      if (select.value === "string:ALL") { console.log(TAG, "Pagination already ALL"); resolve(); return; }
+      if (select.value === "string:ALL") { log("Pagination already ALL"); resolve(); return; }
 
-      console.log(TAG, "Setting pagination to ALL (current:", select.value, ")");
+      log("Setting pagination to ALL (current:", select.value, ")");
 
-      // Use AngularJS scope if available for reliable model update
       if (typeof angular !== "undefined") {
         try {
           var scope = angular.element(select).scope();
@@ -298,20 +279,18 @@
               scope.ctrl.itemsPerPage = "ALL";
               scope.ctrl.onPageSizeSelect();
             });
-            console.log(TAG, "Pagination set via AngularJS scope");
-            // Give AngularJS time to re-render
+            log("Pagination set via AngularJS scope");
             setTimeout(resolve, 500);
             return;
           }
         } catch (e) {
-          console.warn(TAG, "AngularJS scope approach failed, using DOM fallback:", e);
+          warn("AngularJS scope approach failed, using DOM fallback:", e);
         }
       }
 
-      // DOM fallback
       select.value = "string:ALL";
       select.dispatchEvent(new Event("change", { bubbles: true }));
-      console.log(TAG, "Pagination set via DOM event");
+      log("Pagination set via DOM event");
       setTimeout(resolve, 500);
     });
   }
