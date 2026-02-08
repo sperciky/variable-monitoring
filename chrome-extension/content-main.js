@@ -221,11 +221,12 @@
         selectVariablesOnPage(variableNames);
       }).catch(function (e) {
         warn("Navigation failed:", e.message, "— forcing page reload");
-        // Store pending selection so it survives reload
-        window.__gtm_monitor_pending_selection = {
-          hash: hash,
-          variableNames: variableNames,
-        };
+        // Store pending selection in sessionStorage (survives page reload)
+        try {
+          sessionStorage.setItem("__gtm_monitor_pending_selection", JSON.stringify({
+            variableNames: variableNames,
+          }));
+        } catch (e) { /* ignore quota errors */ }
         window.location.href = "https://tagmanager.google.com/" + hash;
       });
     }
@@ -275,15 +276,22 @@
     });
   }
 
-  // Check for pending selection after page load (survives forced reload)
-  if (window.__gtm_monitor_pending_selection) {
-    var pending = window.__gtm_monitor_pending_selection;
-    delete window.__gtm_monitor_pending_selection;
-    log("Found pending selection from before reload, resuming...");
-    setTimeout(function () {
-      selectVariablesOnPage(pending.variableNames);
-    }, 2000);
-  }
+  // Check for pending selection after page load (survives forced reload via sessionStorage)
+  try {
+    var pendingJson = sessionStorage.getItem("__gtm_monitor_pending_selection");
+    if (pendingJson) {
+      sessionStorage.removeItem("__gtm_monitor_pending_selection");
+      var pending = JSON.parse(pendingJson);
+      log("Found pending selection from before reload, resuming with", pending.variableNames.length, "variables...");
+      // Wait for the variables page to fully render after reload
+      waitForElement("a.wd-variable-name", 15000).then(function () {
+        log("Variables page ready after reload, starting selection");
+        selectVariablesOnPage(pending.variableNames);
+      }).catch(function (e) {
+        err("Failed to find variables page after reload:", e.message);
+      });
+    }
+  } catch (e) { /* ignore */ }
 
   async function selectVariablesOnPage(names) {
     const nameSet = new Set(names);
