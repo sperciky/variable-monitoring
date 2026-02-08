@@ -25,6 +25,30 @@ let gtmParams   = null;    // { accountId, containerId, containerDraftId | conta
 let analysisResult = null; // result from analyzeContainer()
 let exportHistory  = [];   // array of export entries from storage
 
+// ---- Ensure content scripts are alive on the GTM tab ----------------
+async function ensureContentScripts(tabId) {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: "ping" });
+    console.log("Content script is alive");
+  } catch (err) {
+    console.warn("Content script not responding, injecting on-demand:", err.message);
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        files: ["content-main.js"],
+        world: "MAIN",
+      });
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        files: ["content.js"],
+      });
+      console.log("Content scripts injected on-demand");
+    } catch (injectErr) {
+      console.error("Failed to inject content scripts:", injectErr.message);
+    }
+  }
+}
+
 // ---- Init -----------------------------------------------------------
 (async function init() {
   // Restore enabled state
@@ -61,7 +85,14 @@ let exportHistory  = [];   // array of export entries from storage
     $btnRun.disabled = true;
   }
 
-  // Load export history
+  // Ensure content scripts are alive on the GTM tab
+  if (currentTab && gtmParams) {
+    await ensureContentScripts(currentTab.id);
+  }
+
+  // Load export history (after ensuring scripts, so flushed exports are available)
+  // Small delay to let flush complete if scripts were just injected
+  await new Promise(r => setTimeout(r, 500));
   await loadExportHistory();
 
   // If we have a cached analysis result for this container, show it
@@ -420,11 +451,36 @@ $btnSelUnused.addEventListener("click", async () => {
   // (chrome.tabs.update with hash-only change doesn't trigger SPA navigation)
   if (currentTab) {
     const hash = new URL(varsUrl).hash;
-    chrome.tabs.sendMessage(currentTab.id, {
+    const message = {
       type: "navigate-and-select",
       hash: hash,
       variableNames: variableNames,
-    });
+    };
+
+    try {
+      await chrome.tabs.sendMessage(currentTab.id, message);
+    } catch (err) {
+      // Content script not available — inject it on-demand and retry
+      console.warn("Content script not reachable, injecting on-demand:", err.message);
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: currentTab.id },
+          files: ["content-main.js"],
+          world: "MAIN",
+        });
+        await chrome.scripting.executeScript({
+          target: { tabId: currentTab.id },
+          files: ["content.js"],
+        });
+        // Small delay to let scripts initialize
+        await new Promise(r => setTimeout(r, 300));
+        await chrome.tabs.sendMessage(currentTab.id, message);
+      } catch (retryErr) {
+        console.error("Retry after injection also failed:", retryErr);
+        setStatus("Please refresh the GTM page and try again", "error");
+        return;
+      }
+    }
   }
 
   setStatus(`Navigating to select ${variableNames.length} variables...`, "success");
