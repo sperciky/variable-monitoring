@@ -1,0 +1,259 @@
+/* ------------------------------------------------------------------ */
+/* Base                                                                */
+/* ------------------------------------------------------------------ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: #202124;
+  background: #f8f9fa;
+  min-width: 420px;
+  max-width: 600px;
+}
+
+/* When running in detached window let it stretch */
+body.detached {
+  min-width: auto;
+  max-width: none;
+  width: 100%;
+}
+
+#popup-root { position: relative; }
+
+/* ------------------------------------------------------------------ */
+/* Header                                                              */
+/* ------------------------------------------------------------------ */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: #1a73e8;
+  color: #fff;
+}
+.header__title { font-size: 14px; font-weight: 600; }
+.header__controls { display: flex; align-items: center; gap: 10px; }
+
+/* ------------------------------------------------------------------ */
+/* Toggle switch                                                       */
+/* ------------------------------------------------------------------ */
+.toggle { position: relative; display: inline-block; width: 36px; height: 20px; }
+.toggle input { display: none; }
+.toggle__slider {
+  position: absolute; inset: 0;
+  background: rgba(255,255,255,0.35);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background .25s;
+}
+.toggle__slider::after {
+  content: "";
+  position: absolute; left: 2px; top: 2px;
+  width: 16px; height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform .25s;
+}
+.toggle input:checked + .toggle__slider { background: #34a853; }
+.toggle input:checked + .toggle__slider::after { transform: translateX(16px); }
+
+/* ------------------------------------------------------------------ */
+/* Buttons                                                             */
+/* ------------------------------------------------------------------ */
+.btn {
+  border: none; border-radius: 4px;
+  padding: 6px 16px;
+  font-size: 13px; font-weight: 500;
+  cursor: pointer;
+  transition: background .15s, opacity .15s;
+}
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn--primary { background: #1a73e8; color: #fff; }
+.btn--primary:hover:not(:disabled) { background: #1557b0; }
+.btn--icon {
+  background: transparent; color: #fff;
+  font-size: 16px; padding: 4px 6px;
+  line-height: 1;
+}
+.btn--icon:hover { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+/* ------------------------------------------------------------------ */
+/* Status bar                                                          */
+/* ------------------------------------------------------------------ */
+.status-bar {
+  padding: 6px 14px;
+  font-size: 12px;
+  color: #5f6368;
+  background: #fff;
+  border-bottom: 1px solid #dadce0;
+}
+.status-bar.error { color: #d93025; }
+.status-bar.success { color: #1e8e3e; }
+
+/* ------------------------------------------------------------------ */
+/* Container info                                                      */
+/* ------------------------------------------------------------------ */
+.container-info {
+  padding: 8px 14px;
+  background: #e8f0fe;
+  border-bottom: 1px solid #d2e3fc;
+  font-size: 12px;
+  color: #174ea6;
+}
+
+/* ------------------------------------------------------------------ */
+/* Action bar                                                          */
+/* ------------------------------------------------------------------ */
+.action-bar {
+  padding: 10px 14px;
+  display: flex; gap: 8px;
+  background: #fff;
+  border-bottom: 1px solid #dadce0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Summary cards                                                       */
+/* ------------------------------------------------------------------ */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px 14px;
+}
+.card {
+  background: #fff;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+}
+.card__number { font-size: 22px; font-weight: 700; }
+.card__label { font-size: 11px; color: #5f6368; margin-top: 2px; }
+.card--danger .card__number { color: #d93025; }
+.card--warning .card__number { color: #e37400; }
+.card--info .card__number { color: #1a73e8; }
+
+/* ------------------------------------------------------------------ */
+/* Tabs                                                                */
+/* ------------------------------------------------------------------ */
+.tabs {
+  display: flex;
+  border-bottom: 2px solid #dadce0;
+  background: #fff;
+  padding: 0 14px;
+}
+.tab {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  padding: 8px 14px;
+  margin-bottom: -2px;
+  font-size: 12px; font-weight: 500;
+  color: #5f6368;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.tab:hover { color: #202124; }
+.tab--active { color: #1a73e8; border-bottom-color: #1a73e8; }
+
+/* ------------------------------------------------------------------ */
+/* Panels                                                              */
+/* ------------------------------------------------------------------ */
+.panel {
+  display: none;
+  padding: 10px 14px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+body.detached .panel { max-height: none; }
+.panel--active { display: block; }
+
+/* ------------------------------------------------------------------ */
+/* Result tables                                                       */
+/* ------------------------------------------------------------------ */
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.result-table th {
+  text-align: left;
+  padding: 6px 8px;
+  background: #f1f3f4;
+  color: #5f6368;
+  font-weight: 600;
+  position: sticky; top: 0;
+  border-bottom: 1px solid #dadce0;
+}
+.result-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid #eeefef;
+  vertical-align: top;
+}
+.result-table tr:hover td { background: #f8f9fa; }
+
+.var-name {
+  font-family: "Roboto Mono", monospace;
+  font-size: 12px;
+  background: #f1f3f4;
+  padding: 1px 5px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.var-name:hover { background: #e8eaed; }
+.var-name.copied { background: #ceead6; }
+
+/* ------------------------------------------------------------------ */
+/* Duplicate group                                                     */
+/* ------------------------------------------------------------------ */
+.dup-group {
+  margin-bottom: 12px;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.dup-group__header {
+  padding: 6px 10px;
+  background: #fef7e0;
+  border-bottom: 1px solid #fdd663;
+  font-weight: 500; font-size: 12px;
+  color: #b06000;
+}
+
+/* ------------------------------------------------------------------ */
+/* Empty state                                                         */
+/* ------------------------------------------------------------------ */
+.empty-state {
+  text-align: center;
+  padding: 30px 14px;
+  color: #80868b;
+}
+.empty-state__icon { font-size: 28px; margin-bottom: 8px; }
+
+/* ------------------------------------------------------------------ */
+/* Disabled overlay                                                    */
+/* ------------------------------------------------------------------ */
+.disabled-overlay {
+  position: absolute; inset: 52px 0 0 0;
+  background: rgba(248,249,250,0.92);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: #80868b;
+  font-size: 13px;
+  z-index: 10;
+}
+
+/* ------------------------------------------------------------------ */
+/* Utilities                                                           */
+/* ------------------------------------------------------------------ */
+.hidden { display: none !important; }
+.text-muted { color: #80868b; }
+.badge {
+  display: inline-block;
+  font-size: 10px; font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 10px;
+  color: #fff;
+}
+.badge--high { background: #d93025; }
+.badge--medium { background: #e37400; }
+.badge--low { background: #1a73e8; }
