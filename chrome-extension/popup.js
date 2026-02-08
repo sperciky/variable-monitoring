@@ -176,7 +176,7 @@ function buildExportLabel(meta, containerData) {
     $ctrInfo.textContent = `Account: ${gtmParams.accountId}  |  Container: ${gtmParams.containerId}`;
     $ctrInfo.classList.remove("hidden");
   } else {
-    setStatus("Navigate to a GTM container page first", "error");
+    setStatus("Navigate to a GTM Admin section Export Container page first", "error");
     $btnRun.disabled = true;
   }
 
