@@ -138,6 +138,9 @@ function buildExportLabel(meta, containerData) {
 
 // ---- Init -----------------------------------------------------------
 (async function init() {
+  // Notify background that popup is open — clears the "ready" badge
+  chrome.runtime.connect({ name: "popup" });
+
   // Restore enabled state
   const { gtmMonitorEnabled = true } = await chrome.storage.local.get("gtmMonitorEnabled");
   $toggle.checked = gtmMonitorEnabled;
