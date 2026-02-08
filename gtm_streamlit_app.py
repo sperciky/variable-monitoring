@@ -311,8 +311,8 @@ def render_dashboard(data: dict):
     if recommendations:
         st.markdown("## Container Improvement Guide")
         for rec in recommendations:
-            icon = {"HIGH": ":red_circle:", "MEDIUM": ":orange_circle:", "LOW": ":blue_circle:"}[rec["priority"]]
-            with st.expander(f"{icon} **[{rec['priority']}]** {rec['title']} — _{rec['impact']}_", expanded=(rec["priority"] == "HIGH")):
+            icon = {"HIGH": "\U0001f534", "MEDIUM": "\U0001f7e0", "LOW": "\U0001f535"}[rec["priority"]]
+            with st.expander(f"{icon} [{rec['priority']}] {rec['title']} \u2014 {rec['impact']}", expanded=True):
                 st.write(rec.get("action", ""))
                 # Render items as a scrollable list
                 items_md = "\n".join(f"- {item}" for item in rec["items"])
@@ -408,7 +408,7 @@ def render_dashboard(data: dict):
                 continue
             clean_type = dup_type.replace("_duplicates", "").replace("_", " ").title()
             for i, group in enumerate(groups, 1):
-                with st.expander(f"{clean_type} — Group {i}: {', '.join(v['name'] for v in group)}"):
+                with st.expander(f"{clean_type} \u2014 Group {i}: {', '.join(v['name'] for v in group)}", expanded=True):
                     st.dataframe(pd.DataFrame(group), hide_index=True, use_container_width=True)
 
     # ---- Download JSON report ----
