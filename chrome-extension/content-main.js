@@ -226,15 +226,16 @@
     try {
       sessionStorage.setItem("__gtm_monitor_pending_selection", JSON.stringify({
         variableNames: variableNames,
+        targetHash: hash,
       }));
-      log("Saved", variableNames.length, "variable names to sessionStorage");
+      log("Saved", variableNames.length, "variable names + target hash to sessionStorage");
     } catch (e) {
       err("Failed to save to sessionStorage:", e);
     }
-    // Set the hash first, then force a real page reload.
-    // Just setting href to the same origin + different hash does NOT reload.
-    window.location.hash = hash;
-    log("Hash set, forcing page reload...");
+    // Do NOT set window.location.hash before reload — AngularJS intercepts
+    // the hashchange and reverts it before reload() fires.
+    // Instead, the recovery code will navigate after the page loads.
+    log("Forcing page reload...");
     window.location.reload();
   }
 
@@ -267,9 +268,22 @@
     if (pendingJson) {
       sessionStorage.removeItem("__gtm_monitor_pending_selection");
       var pending = JSON.parse(pendingJson);
-      log("Found pending selection from before reload, resuming with", pending.variableNames.length, "variables...");
-      // Wait for the variables page to fully render after reload
-      waitForElement("a.wd-variable-name", 15000).then(function () {
+      log("Found pending selection from before reload, resuming with",
+        pending.variableNames.length, "variables, target hash:", pending.targetHash);
+
+      // Wait for Angular to bootstrap (body ready + initial route settled),
+      // then navigate to the variables page and select.
+      waitForElement("body", 10000).then(function () {
+        // Small delay to let Angular finish bootstrapping and settle the initial route
+        return new Promise(function (r) { setTimeout(r, 1500); });
+      }).then(function () {
+        if (pending.targetHash) {
+          log("Navigating to target hash:", pending.targetHash);
+          window.location.hash = pending.targetHash;
+        }
+        log("Waiting for variables page elements...");
+        return waitForElement("a.wd-variable-name", 15000);
+      }).then(function () {
         log("Variables page ready after reload, starting selection");
         selectVariablesOnPage(pending.variableNames);
       }).catch(function (e) {
