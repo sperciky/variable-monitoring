@@ -356,7 +356,7 @@ def render_dashboard(data: dict):
         },
     ))
     fig_gauge.update_layout(height=300, paper_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig_gauge, use_container_width=True)
+    st.plotly_chart(fig_gauge, width="stretch")
 
     # ---- Recommendations ----
     recommendations = create_improvement_recommendations(data)
@@ -389,7 +389,7 @@ def render_dashboard(data: dict):
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     )
-    st.plotly_chart(fig_impact, use_container_width=True)
+    st.plotly_chart(fig_impact, width="stretch")
 
     # Pie charts side-by-side
     col_a, col_b = st.columns(2)
@@ -402,13 +402,13 @@ def render_dashboard(data: dict):
             marker_colors=[COLORS["success"], COLORS["danger"]],
         )])
         fig_usage.update_layout(title="Variable Usage Status", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_usage, use_container_width=True)
+        st.plotly_chart(fig_usage, width="stretch")
 
     with col_b:
         type_counts = df_impact["Type"].value_counts()
         fig_types = px.pie(values=type_counts.values, names=type_counts.index, title="Variable Distribution by Type")
         fig_types.update_layout(paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_types, use_container_width=True)
+        st.plotly_chart(fig_types, width="stretch")
 
     # ---- Tag type statistics ----
     tag_stats = tag_impact.get("tag_type_statistics", {})
@@ -425,7 +425,7 @@ def render_dashboard(data: dict):
                 "Avg Evals / Tag": round(avg, 1),
             })
         df_tags = pd.DataFrame(rows).sort_values("Total Evaluations", ascending=False)
-        st.dataframe(df_tags, hide_index=True, use_container_width=True)
+        st.dataframe(df_tags, hide_index=True, width="stretch")
 
     # ---- High impact variables table ----
     st.markdown("## High Impact Variables")
@@ -439,8 +439,8 @@ def render_dashboard(data: dict):
                 return "background-color: #fff3cd"
         return ""
 
-    styled = df_table.style.applymap(color_evals, subset=["Total Evals"])
-    st.dataframe(styled, hide_index=True, use_container_width=True)
+    styled = df_table.style.map(color_evals, subset=["Total Evals"])
+    st.dataframe(styled, hide_index=True, width="stretch")
 
     # ---- Unused variables detail ----
     unused_vars = data.get("unused_variables", [])
