@@ -129,56 +129,26 @@
     return parts.length > 0 ? parts.join(" | ") : "Export";
   }
 
-  // ---- Pending variable selection task --------------------------------
-  // When the popup navigates to the variables page and stores a task,
-  // detect it here and relay to MAIN world for DOM interaction.
-
-  async function checkPendingSelection() {
-    try {
-      const { pendingVariableSelection } = await chrome.storage.local.get("pendingVariableSelection");
-      if (!pendingVariableSelection) return;
-
-      // Check if we're on a variables overview page
-      const hash = window.location.hash || "";
-      if (!hash.includes("/variables")) {
-        console.log(TAG, "Not on variables page yet, hash:", hash);
-        return;
-      }
-
-      console.log(TAG, "On variables page with pending selection of",
-        pendingVariableSelection.variableNames.length, "variables");
-
-      // Clear the task immediately to prevent re-execution
-      await chrome.storage.local.remove("pendingVariableSelection");
-
-      // Relay to MAIN world via postMessage
-      window.postMessage({
-        type: "__gtm_monitor_select_vars",
-        variableNames: pendingVariableSelection.variableNames,
-      }, "*");
-    } catch (err) {
-      console.error(TAG, "Error checking pending selection:", err);
-    }
-  }
-
-  // Check on hashchange (SPA navigation) — also used for param detection above,
-  // but this separate listener is specifically for the selection task
-  window.addEventListener("hashchange", () => {
-    if (!isContextValid()) return;
-    setTimeout(checkPendingSelection, 500);
-  });
-
-  // Check on storage change (task stored while already on page)
+  // ---- Navigate-and-select: direct message from popup -----------------
+  // The popup sends the target hash and variable names directly.
+  // We change the hash (SPA navigation) then relay to MAIN world.
   if (isContextValid()) {
-    chrome.storage.onChanged.addListener(function (changes) {
-      if (!isContextValid()) return;
-      if (changes.pendingVariableSelection && changes.pendingVariableSelection.newValue) {
-        setTimeout(checkPendingSelection, 500);
-      }
-    });
+    chrome.runtime.onMessage.addListener(function (msg) {
+      if (msg.type !== "navigate-and-select") return;
+      console.log(TAG, "navigate-and-select received, hash:", msg.hash,
+        "variables:", msg.variableNames.length);
 
-    // Check on init (page reload with pending task)
-    checkPendingSelection();
+      // Navigate the SPA by changing the hash
+      window.location.hash = msg.hash.replace(/^#/, "");
+
+      // Give the SPA time to render the new view, then relay to MAIN world
+      setTimeout(function () {
+        window.postMessage({
+          type: "__gtm_monitor_select_vars",
+          variableNames: msg.variableNames,
+        }, "*");
+      }, 1000);
+    });
   }
 
   console.log(TAG, "All listeners registered, waiting for export data...");

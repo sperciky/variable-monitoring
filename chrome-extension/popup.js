@@ -416,14 +416,15 @@ $btnSelUnused.addEventListener("click", async () => {
   // Collect unused variable names
   const variableNames = analysisResult.unusedVariables.map(v => v.name);
 
-  // Store the pending selection task
-  await chrome.storage.local.set({
-    pendingVariableSelection: { variableNames, url: varsUrl },
-  });
-
-  // Navigate the tab to the variables overview page
+  // Send message to content script to navigate and select
+  // (chrome.tabs.update with hash-only change doesn't trigger SPA navigation)
   if (currentTab) {
-    chrome.tabs.update(currentTab.id, { url: varsUrl });
+    const hash = new URL(varsUrl).hash;
+    chrome.tabs.sendMessage(currentTab.id, {
+      type: "navigate-and-select",
+      hash: hash,
+      variableNames: variableNames,
+    });
   }
 
   setStatus(`Navigating to select ${variableNames.length} variables...`, "success");
