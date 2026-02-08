@@ -322,15 +322,18 @@ function applyEnabledState(enabled) {
 }
 
 // ---- Tutorial -------------------------------------------------------
-$btnHelp.addEventListener("click", () => {
+function openTutorial() {
+  document.body.classList.add("tutorial-open");
   $tutorial.classList.remove("hidden");
-});
-$btnCloseTut.addEventListener("click", () => {
+}
+function closeTutorial() {
   $tutorial.classList.add("hidden");
-});
+  document.body.classList.remove("tutorial-open");
+}
+$btnHelp.addEventListener("click", openTutorial);
+$btnCloseTut.addEventListener("click", closeTutorial);
 $tutorial.addEventListener("click", (e) => {
-  // Close when clicking the backdrop (outside the tutorial card)
-  if (e.target === $tutorial) $tutorial.classList.add("hidden");
+  if (e.target === $tutorial) closeTutorial();
 });
 
 // ---- Detach ---------------------------------------------------------
