@@ -11,7 +11,7 @@ body {
   min-width: 420px;
   max-width: 600px;
 }
-body.tutorial-open { min-height: 580px; }
+body.tutorial-open { height: 580px; overflow: hidden; }
 
 /* When running in detached window let it stretch */
 body.detached {
@@ -367,7 +367,7 @@ body.detached .panel { max-height: none; }
 /* Tutorial overlay                                                    */
 /* ------------------------------------------------------------------ */
 .tutorial-overlay {
-  position: absolute; inset: 0;
+  position: fixed; inset: 0;
   background: #fff;
   z-index: 20;
   display: flex; flex-direction: column;
@@ -376,7 +376,6 @@ body.detached .panel { max-height: none; }
   display: flex; flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
 }
 .tutorial__header {
   display: flex; justify-content: space-between; align-items: center;
