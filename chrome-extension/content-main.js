@@ -11,6 +11,35 @@
   const TAG = "[GTM Monitor MAIN]";
   console.log(TAG, "Interceptor script loaded at", window.location.href);
 
+  // ---- Extract workspace name from the export dialog DOM ------------
+  function getWorkspaceName() {
+    try {
+      const el = document.querySelector(
+        "gtm-selective-export > div > div.gtm-sheet-header > div.gtm-sheet-header__title > div"
+      );
+      if (el) {
+        const text = el.innerText.trim();
+        // "Export Default Workspace" → "Default Workspace"
+        return text.replace(/^Export\s+/i, "") || text;
+      }
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
+  // ---- Extract account/container/workspace IDs from the API URL -----
+  function parseExportUrl(url) {
+    // .../api/accounts/218461/containers/55831269/workspaces/678/partialexport?hl=en
+    // .../api/accounts/218461/containers/55831269/versions/123/partialexport?hl=en
+    const m = url.match(/\/api\/accounts\/(\d+)\/containers\/(\d+)\/(workspaces|versions)\/(\d+)\/partialexport/);
+    if (!m) return {};
+    return {
+      accountId: m[1],
+      containerId: m[2],
+      sourceType: m[3],   // "workspaces" or "versions"
+      sourceId: m[4],
+    };
+  }
+
   // ---- Intercept XMLHttpRequest (AngularJS uses this) ---------------
   const _origXHROpen = XMLHttpRequest.prototype.open;
   const _origXHRSend = XMLHttpRequest.prototype.send;
@@ -36,7 +65,7 @@
       this.addEventListener("load", function () {
         console.log(TAG, "XHR response status:", this.status, "length:", (this.responseText || "").length);
         try {
-          processExportResponse(this.responseText, "XHR");
+          processExportResponse(this.responseText, url, "XHR");
         } catch (e) {
           console.error(TAG, "XHR processing error:", e);
         }
@@ -60,7 +89,7 @@
         clone.text().then(function (text) {
           console.log(TAG, "fetch response status:", response.status, "length:", text.length);
           try {
-            processExportResponse(text, "fetch");
+            processExportResponse(text, url, "fetch");
           } catch (e) {
             console.error(TAG, "fetch processing error:", e);
           }
@@ -72,7 +101,7 @@
   };
 
   // ---- Common response processor ------------------------------------
-  function processExportResponse(text, source) {
+  function processExportResponse(text, requestUrl, source) {
     // Google APIs prefix with )]}',\n — strip it
     const jsonStr = text.replace(/^\)\]\}',?\s*/, "");
     console.log(TAG, "Stripped prefix, parsing JSON from", source, "first 200 chars:", jsonStr.substring(0, 200));
@@ -93,11 +122,22 @@
     const containerData = JSON.parse(exportedJson);
     console.log(TAG, "Parsed container data, keys:", Object.keys(containerData));
 
+    // Gather metadata
+    const urlInfo = parseExportUrl(requestUrl);
+    const workspaceName = getWorkspaceName();
+    console.log(TAG, "URL info:", urlInfo, "Workspace name:", workspaceName);
+
     // Use postMessage to cross the MAIN→ISOLATED world boundary
-    // (CustomEvent.detail does NOT cross world boundaries)
     window.postMessage({
       type: "__gtm_monitor_export",
       containerData: JSON.stringify(containerData),
+      meta: {
+        accountId: urlInfo.accountId || "",
+        containerId: urlInfo.containerId || "",
+        sourceType: urlInfo.sourceType || "",
+        sourceId: urlInfo.sourceId || "",
+        workspaceName: workspaceName || "",
+      },
     }, "*");
     console.log(TAG, "Posted message to ISOLATED world via postMessage");
   }
