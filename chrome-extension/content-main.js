@@ -199,35 +199,88 @@
   });
 
   function navigateAndSelect(hash, variableNames) {
-    // Navigate using AngularJS $location for proper routing
     var path = hash.replace(/^#/, "");
     console.log(TAG, "Navigating AngularJS to:", path);
 
+    // 1. Close any open GTM dialog/sheet that may block navigation
+    closeGtmDialogs();
+
+    // 2. Small delay for dialog close animation, then navigate
+    setTimeout(function () {
+      doNavigate(path, hash);
+
+      // 3. Wait for the URL to actually reflect the target path, then select
+      waitForUrlChange(path, 10000).then(function () {
+        console.log(TAG, "URL confirmed, waiting for page render...");
+        setTimeout(function () {
+          selectVariablesOnPage(variableNames);
+        }, 500);
+      }).catch(function () {
+        console.warn(TAG, "URL did not change, retrying navigation...");
+        // Fallback: force hash change directly
+        window.location.hash = hash;
+        setTimeout(function () {
+          selectVariablesOnPage(variableNames);
+        }, 2000);
+      });
+    }, 300);
+  }
+
+  function closeGtmDialogs() {
+    // Close export sheet / any open GTM overlay
+    var closeBtn = document.querySelector(
+      ".gtm-sheet-header__close-button, " +
+      ".gtm-dialog-header__close-button, " +
+      "gtm-selective-export .gtm-sheet-header button"
+    );
+    if (closeBtn) {
+      console.log(TAG, "Closing open GTM dialog/sheet");
+      closeBtn.click();
+      return;
+    }
+    // Fallback: press Escape to close any modal
+    document.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Escape", keyCode: 27, bubbles: true
+    }));
+  }
+
+  function doNavigate(path, hash) {
     if (typeof angular !== "undefined") {
       try {
         var $injector = angular.element(document.body).injector();
         if ($injector) {
-          // Use $timeout to safely run outside any current digest cycle
-          // ($rootScope.$apply throws if a digest is already in progress)
           $injector.invoke(["$location", "$timeout", function ($location, $timeout) {
             $timeout(function () {
               $location.url(path);
             });
           }]);
           console.log(TAG, "Navigation triggered via AngularJS $timeout + $location.url()");
+          return;
         }
       } catch (err) {
         console.warn(TAG, "AngularJS navigation failed, falling back to hash:", err);
-        window.location.hash = hash;
       }
-    } else {
-      window.location.hash = hash;
     }
+    window.location.hash = hash;
+  }
 
-    // Wait for navigation to settle, then select variables
-    setTimeout(function () {
-      selectVariablesOnPage(variableNames);
-    }, 1500);
+  function waitForUrlChange(targetPath, timeout) {
+    return new Promise(function (resolve, reject) {
+      var elapsed = 0;
+      var interval = setInterval(function () {
+        var currentHash = window.location.hash || "";
+        // Check if the current hash contains the target path
+        if (currentHash.indexOf("/variables") >= 0 && currentHash.indexOf(targetPath) >= 0) {
+          clearInterval(interval);
+          resolve();
+        }
+        elapsed += 200;
+        if (elapsed >= timeout) {
+          clearInterval(interval);
+          reject(new Error("URL did not change to target path"));
+        }
+      }, 200);
+    });
   }
 
   async function selectVariablesOnPage(names) {
