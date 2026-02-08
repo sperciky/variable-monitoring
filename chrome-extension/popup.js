@@ -15,6 +15,8 @@ const $overlay   = document.getElementById("disabled-overlay");
 const $exportSel = document.getElementById("export-selector");
 const $select    = document.getElementById("select-export");
 const $btnClear  = document.getElementById("btn-clear-history");
+const $resActs   = document.getElementById("results-actions");
+const $btnSelUnused = document.getElementById("btn-select-unused");
 const panelIds   = ["unused-vars", "duplicates", "unused-tpl"];
 
 // ---- State ----------------------------------------------------------
@@ -268,6 +270,13 @@ function renderResults(result) {
     </div>
   `;
 
+  // Show/hide "Select Unused Variables" button
+  if (unusedVariables.length > 0) {
+    $resActs.classList.remove("hidden");
+  } else {
+    $resActs.classList.add("hidden");
+  }
+
   // Render tab panels
   renderUnusedVars(unusedVariables);
   renderDuplicates(duplicateVariables);
@@ -389,6 +398,37 @@ function renderUnusedTemplates(tpls) {
   $el.innerHTML = html;
   attachCopyListeners($el);
 }
+
+// ---- Select Unused Variables in GTM ---------------------------------
+$btnSelUnused.addEventListener("click", async () => {
+  if (!analysisResult || !analysisResult.unusedVariables.length) return;
+
+  const entry = getSelectedEntry();
+  if (!entry || !entry.accountId || !entry.containerId || !entry.sourceId) {
+    setStatus("Missing workspace info \u2014 re-export the container first", "error");
+    return;
+  }
+
+  // Build variables overview URL
+  const sourceType = entry.sourceType || "workspaces";
+  const varsUrl = `https://tagmanager.google.com/#/container/accounts/${entry.accountId}/containers/${entry.containerId}/${sourceType}/${entry.sourceId}/variables`;
+
+  // Collect unused variable names
+  const variableNames = analysisResult.unusedVariables.map(v => v.name);
+
+  // Store the pending selection task
+  await chrome.storage.local.set({
+    pendingVariableSelection: { variableNames, url: varsUrl },
+  });
+
+  // Navigate the tab to the variables overview page
+  if (currentTab) {
+    chrome.tabs.update(currentTab.id, { url: varsUrl });
+  }
+
+  setStatus(`Navigating to select ${variableNames.length} variables...`, "success");
+  setTimeout(() => window.close(), 400);
+});
 
 // ---- Utility --------------------------------------------------------
 function esc(s) {

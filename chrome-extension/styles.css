@@ -71,6 +71,11 @@ body.detached {
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn--primary { background: #1a73e8; color: #fff; }
 .btn--primary:hover:not(:disabled) { background: #1557b0; }
+.btn--secondary {
+  background: #fff; color: #1a73e8;
+  border: 1px solid #1a73e8;
+}
+.btn--secondary:hover:not(:disabled) { background: #e8f0fe; }
 .btn--icon {
   background: transparent; color: #fff;
   font-size: 16px; padding: 4px 6px;
@@ -160,6 +165,17 @@ body.detached {
   display: flex; gap: 8px;
   background: #fff;
   border-bottom: 1px solid #dadce0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Results actions                                                     */
+/* ------------------------------------------------------------------ */
+.results-actions {
+  padding: 8px 14px;
+  background: #fff;
+  border-bottom: 1px solid #dadce0;
+  display: flex;
+  gap: 8px;
 }
 
 /* ------------------------------------------------------------------ */
