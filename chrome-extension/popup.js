@@ -48,24 +48,49 @@ let analysisResult = null; // result from analyzeContainer()
   }
 
   if (gtmParams) {
-    setStatus(`GTM container detected`, "success");
     $ctrInfo.textContent = `Account: ${gtmParams.accountId}  |  Container: ${gtmParams.containerId}`;
     $ctrInfo.classList.remove("hidden");
     $btnRun.disabled = false;
+    // Check if we already have intercepted data
+    await checkForInterceptedData();
   } else {
     setStatus("Navigate to a GTM container page first", "error");
     $btnRun.disabled = true;
   }
 
-  // If we have a cached result for this container, show it
+  // If we have a cached analysis result for this container, show it
   const { cachedResult, cachedParams } = await chrome.storage.local.get(["cachedResult", "cachedParams"]);
   if (cachedResult && cachedParams && gtmParams &&
       cachedParams.accountId === gtmParams.accountId &&
       cachedParams.containerId === gtmParams.containerId) {
     analysisResult = cachedResult;
     renderResults(analysisResult);
+    setStatus("Showing cached results (click Run Analysis to refresh)", "success");
   }
 })();
+
+// ---- Check for intercepted export data ------------------------------
+async function checkForInterceptedData() {
+  const { interceptedExport, interceptedAt } = await chrome.storage.local.get(["interceptedExport", "interceptedAt"]);
+  if (interceptedExport && interceptedAt) {
+    const age = Date.now() - interceptedAt;
+    const mins = Math.floor(age / 60000);
+    if (age < 3600000) { // less than 1 hour old
+      setStatus(`Export data captured ${mins < 1 ? "just now" : mins + "m ago"} — click Run Analysis`, "success");
+    } else {
+      setStatus("GTM container detected — click Export in GTM, then Run Analysis", "");
+    }
+  } else {
+    setStatus("GTM container detected — click Export in GTM, then Run Analysis", "");
+  }
+}
+
+// ---- Listen for new intercepted data while popup is open -------------
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === "export-intercepted") {
+    setStatus("Export data captured — click Run Analysis", "success");
+  }
+});
 
 // ---- URL Parsing ----------------------------------------------------
 function parseGTMUrl(url) {
@@ -125,10 +150,10 @@ $btnRun.addEventListener("click", runAnalysis);
 async function runAnalysis() {
   if (!gtmParams) return;
   $btnRun.disabled = true;
-  setStatus("Fetching container data...", "");
+  setStatus("Looking for container data...", "");
 
   try {
-    const gtmJson = await fetchContainerJson(gtmParams);
+    const gtmJson = await getContainerData();
     setStatus("Analyzing...", "");
     analysisResult = window.GTMAnalyzer.analyzeContainer(gtmJson, true);
 
@@ -145,60 +170,23 @@ async function runAnalysis() {
   }
 }
 
-// ---- Fetch container JSON via GTM internal API ----------------------
-// The fetch MUST run in the page's JS context (world: "MAIN") so that
-// the browser sends the same session cookies and XSRF tokens as the
-// GTM UI itself.  We use chrome.scripting.executeScript for this.
-async function fetchContainerJson(params) {
-  let apiUrl;
-  if (params.containerDraftId) {
-    apiUrl = `https://tagmanager.google.com/api/accounts/${params.accountId}/containers/${params.containerId}/workspaces/${params.containerDraftId}/partialexport`;
-  } else if (params.containerVersionId) {
-    apiUrl = `https://tagmanager.google.com/api/accounts/${params.accountId}/containers/${params.containerId}/versions/${params.containerVersionId}/partialexport`;
-  } else {
-    throw new Error("No workspace draft or version ID found in URL");
+// ---- Get container data (from intercepted export) -------------------
+async function getContainerData() {
+  // Check for intercepted partialexport data
+  const { interceptedExport, interceptedAt } = await chrome.storage.local.get(["interceptedExport", "interceptedAt"]);
+
+  if (interceptedExport && interceptedAt) {
+    const age = Date.now() - interceptedAt;
+    if (age < 3600000) { // Accept data up to 1 hour old
+      return interceptedExport;
+    }
   }
 
-  if (!currentTab || !currentTab.id) {
-    throw new Error("No active GTM tab found");
-  }
-
-  // Execute fetch inside the page context so cookies/XSRF are included
-  const results = await chrome.scripting.executeScript({
-    target: { tabId: currentTab.id },
-    world: "MAIN",
-    func: async (url) => {
-      try {
-        const resp = await fetch(url, {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: [], retainFolderStructure: true }),
-        });
-        if (!resp.ok) {
-          return { error: `API returned ${resp.status} ${resp.statusText}` };
-        }
-        const data = await resp.json();
-        const jsonStr = (data.default || data).exportedContainerJson;
-        if (!jsonStr) {
-          return { error: "No exportedContainerJson in API response" };
-        }
-        return { data: JSON.parse(jsonStr) };
-      } catch (e) {
-        return { error: e.message || String(e) };
-      }
-    },
-    args: [apiUrl],
-  });
-
-  const result = results && results[0] && results[0].result;
-  if (!result) {
-    throw new Error("Failed to execute script in page context");
-  }
-  if (result.error) {
-    throw new Error(result.error);
-  }
-  return result.data;
+  throw new Error(
+    "No export data available. In GTM, go to Admin > Export Container, " +
+    "select all items, then click \"Export\" or \"Preview\". " +
+    "The extension will automatically capture the data."
+  );
 }
 
 // ---- Status helpers -------------------------------------------------

@@ -5,8 +5,7 @@
   "description": "Analyze Google Tag Manager containers for unused variables, duplicates, and unused custom templates.",
   "permissions": [
     "storage",
-    "activeTab",
-    "scripting"
+    "activeTab"
   ],
   "host_permissions": [
     "https://tagmanager.google.com/*"
