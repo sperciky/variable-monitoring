@@ -200,27 +200,34 @@
 
   function navigateAndSelect(hash, variableNames) {
     var path = hash.replace(/^#/, "");
-    console.log(TAG, "Navigating AngularJS to:", path);
+    var t0 = performance.now();
+    function ts() { return "+" + Math.round(performance.now() - t0) + "ms"; }
+
+    console.log(TAG, ts(), "Navigate-and-select START, path:", path);
 
     // 1. Close any open GTM dialog/sheet that may block navigation
     closeGtmDialogs();
+    console.log(TAG, ts(), "closeGtmDialogs() done");
 
     // 2. Small delay for dialog close animation, then navigate
     setTimeout(function () {
+      console.log(TAG, ts(), "Dialog close delay elapsed, calling doNavigate()");
       doNavigate(path, hash);
+      console.log(TAG, ts(), "doNavigate() returned, waiting for URL change...");
 
       // 3. Wait for the URL to actually reflect the target path, then select
       waitForUrlChange(path, 10000).then(function () {
-        console.log(TAG, "URL confirmed, waiting for page render...");
+        console.log(TAG, ts(), "URL confirmed, waiting for page render...");
         setTimeout(function () {
-          selectVariablesOnPage(variableNames);
+          console.log(TAG, ts(), "Render delay elapsed, starting selectVariablesOnPage()");
+          selectVariablesOnPage(variableNames, ts);
         }, 250);
       }).catch(function () {
-        console.warn(TAG, "URL did not change, retrying navigation...");
-        // Fallback: force hash change directly
+        console.warn(TAG, ts(), "URL did not change, retrying with hash fallback...");
         window.location.hash = hash;
         setTimeout(function () {
-          selectVariablesOnPage(variableNames);
+          console.log(TAG, ts(), "Fallback delay elapsed, starting selectVariablesOnPage()");
+          selectVariablesOnPage(variableNames, ts);
         }, 2000);
       });
     }, 150);
@@ -283,22 +290,27 @@
     });
   }
 
-  async function selectVariablesOnPage(names) {
+  async function selectVariablesOnPage(names, ts) {
+    if (!ts) { var _t0 = performance.now(); ts = function() { return "+" + Math.round(performance.now() - _t0) + "ms"; }; }
     const nameSet = new Set(names);
     try {
       // 1. Wait for the variables table to appear
-      console.log(TAG, "Waiting for variables table...");
+      console.log(TAG, ts(), "Waiting for variables table...");
       await waitForElement("tr[gtm-table-row]", 15000);
-      console.log(TAG, "Table rows found");
+      console.log(TAG, ts(), "Table rows found");
 
       // 2. Set pagination to ALL so every variable is visible
+      console.log(TAG, ts(), "Setting pagination to ALL...");
       await setPaginationToAll();
+      console.log(TAG, ts(), "Pagination done");
 
       // 3. Wait for row count to stabilize (all rows rendered)
+      console.log(TAG, ts(), "Waiting for row count to stabilize...");
       const totalRows = await waitForStableRowCount(8000);
-      console.log(TAG, "Row count stabilized at", totalRows);
+      console.log(TAG, ts(), "Row count stabilized at", totalRows);
 
       // 4. Click checkboxes for matching variable names
+      console.log(TAG, ts(), "Clicking checkboxes...");
       let selected = 0;
       const rows = document.querySelectorAll("tr[gtm-table-row]");
       for (const row of rows) {
@@ -313,9 +325,9 @@
           }
         }
       }
-      console.log(TAG, "Selected", selected, "of", names.length, "unused variables");
+      console.log(TAG, ts(), "DONE — Selected", selected, "of", names.length, "unused variables");
     } catch (err) {
-      console.error(TAG, "Variable selection failed:", err);
+      console.error(TAG, ts(), "Variable selection failed:", err);
     }
   }
 
