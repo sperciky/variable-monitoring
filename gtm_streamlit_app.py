@@ -274,6 +274,58 @@ def _esc_js(text: str) -> str:
     return text.replace("\\", "\\\\").replace("'", "\\'").replace('"', '\\"')
 
 
+# JavaScript for clipboard copy — runs inside st.components.v1.html iframe
+_COPY_JS = """\
+<script>
+function copyVar(text, el) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+            _ok(el);
+        }).catch(function() { _fallbackCopy(text, el); });
+    } else {
+        _fallbackCopy(text, el);
+    }
+}
+function _fallbackCopy(text, el) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try { document.execCommand('copy'); _ok(el); } catch(e) {}
+    document.body.removeChild(ta);
+}
+function _ok(el) {
+    el.textContent = '\\u2705';
+    setTimeout(function(){ el.textContent = '\\ud83d\\udccb'; }, 1200);
+}
+// Auto-resize iframe to fit content
+(function(){
+    function resize(){
+        try {
+            if (window.frameElement)
+                window.frameElement.style.height = document.documentElement.scrollHeight + 'px';
+        } catch(e){}
+    }
+    resize(); setTimeout(resize, 50); setTimeout(resize, 200);
+})();
+</script>"""
+
+
+def _render_copyable_html(body_html: str, fallback_height: int = 200):
+    """Render HTML with working copy-to-clipboard JS via an iframe component."""
+    import streamlit.components.v1 as stc
+    page = (
+        '<html><head><style>'
+        'body{font-family:"Source Sans Pro",sans-serif;font-size:14px;'
+        'margin:0;padding:0;color:#262730;}'
+        '</style></head><body>'
+        f'{body_html}{_COPY_JS}'
+        '</body></html>'
+    )
+    stc.html(page, height=fallback_height, scrolling=False)
+
+
 def _copy_span(name: str) -> str:
     """Render a variable name with an inline copy-to-clipboard icon."""
     h = _esc_html(name)
@@ -281,10 +333,9 @@ def _copy_span(name: str) -> str:
     clipboard_icon = "\U0001f4cb"
     return (
         f'<code style="background:#f0f2f6;padding:1px 6px;border-radius:4px;font-size:0.9em;">{h}</code>'
-        f'<span onclick="navigator.clipboard.writeText(\'{j}\');'
-        f"this.textContent='\\u2705';setTimeout(()=>this.textContent='\\ud83d\\udccb',1200)\""
-        f' style="cursor:pointer;margin-left:3px;font-size:0.9em;user-select:none;" '
-        f'title="Copy variable name">{clipboard_icon}</span>'
+        f"<span onclick=\"copyVar('{j}',this)\""
+        f' style="cursor:pointer;margin-left:3px;font-size:0.9em;user-select:none;"'
+        f' title="Copy variable name">{clipboard_icon}</span>'
     )
 
 
@@ -369,7 +420,7 @@ def render_dashboard(data: dict):
                 items_html = "<ul style='padding-left:20px;'>" + "".join(
                     _make_copyable_item(item) for item in rec["items"]
                 ) + "</ul>"
-                st.markdown(items_html, unsafe_allow_html=True)
+                _render_copyable_html(items_html, fallback_height=len(rec["items"]) * 38 + 20)
 
     # ---- Charts ----
     st.markdown("## Variable Evaluation Impact")
@@ -465,7 +516,7 @@ def render_dashboard(data: dict):
                 f'</tr>'
             )
         tbl += '</tbody></table>'
-        st.markdown(tbl, unsafe_allow_html=True)
+        _render_copyable_html(tbl, fallback_height=len(unused_vars) * 36 + 50)
 
     # ---- Duplicate variables detail ----
     duplicates = data.get("duplicate_variables", {})
@@ -496,7 +547,7 @@ def render_dashboard(data: dict):
                         f'<thead><tr style="border-bottom:2px solid #ddd;">{header}</tr></thead>'
                         f'<tbody>{rows}</tbody></table>'
                     )
-                    st.markdown(tbl, unsafe_allow_html=True)
+                    _render_copyable_html(tbl, fallback_height=len(group) * 36 + 50)
 
     # ---- Download JSON report ----
     st.markdown("---")
