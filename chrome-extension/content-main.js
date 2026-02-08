@@ -141,4 +141,133 @@
     }, "*");
     console.log(TAG, "Posted message to ISOLATED world via postMessage");
   }
+
+  // ==================================================================
+  // Variable selection on the Variables overview page
+  // Triggered by postMessage from ISOLATED world content script
+  // ==================================================================
+
+  window.addEventListener("message", function (e) {
+    if (e.source !== window) return;
+    if (!e.data || e.data.type !== "__gtm_monitor_select_vars") return;
+    console.log(TAG, "Variable selection request received:", e.data.variableNames.length, "variables");
+    selectVariablesOnPage(e.data.variableNames);
+  });
+
+  async function selectVariablesOnPage(names) {
+    const nameSet = new Set(names);
+    try {
+      // 1. Wait for the variables table to appear
+      console.log(TAG, "Waiting for variables table...");
+      await waitForElement("tr[gtm-table-row]", 15000);
+      console.log(TAG, "Table rows found");
+
+      // 2. Set pagination to ALL so every variable is visible
+      await setPaginationToAll();
+
+      // 3. Wait for row count to stabilize (all rows rendered)
+      const totalRows = await waitForStableRowCount(8000);
+      console.log(TAG, "Row count stabilized at", totalRows);
+
+      // 4. Click checkboxes for matching variable names
+      let selected = 0;
+      const rows = document.querySelectorAll("tr[gtm-table-row]");
+      for (const row of rows) {
+        const nameLink = row.querySelector("a.wd-variable-name");
+        if (!nameLink) continue;
+        const varName = nameLink.textContent.trim();
+        if (nameSet.has(varName)) {
+          const checkbox = row.querySelector("gtm-table-row-checkbox i");
+          if (checkbox && !checkbox.classList.contains("gtm-check-box-icon")) {
+            checkbox.click();
+            selected++;
+          }
+        }
+      }
+      console.log(TAG, "Selected", selected, "of", names.length, "unused variables");
+    } catch (err) {
+      console.error(TAG, "Variable selection failed:", err);
+    }
+  }
+
+  function setPaginationToAll() {
+    return new Promise(function (resolve) {
+      const select = document.querySelector("gtm-pagination select");
+      if (!select) { console.warn(TAG, "Pagination select not found"); resolve(); return; }
+
+      // Already ALL?
+      if (select.value === "string:ALL") { console.log(TAG, "Pagination already ALL"); resolve(); return; }
+
+      console.log(TAG, "Setting pagination to ALL (current:", select.value, ")");
+
+      // Use AngularJS scope if available for reliable model update
+      if (typeof angular !== "undefined") {
+        try {
+          var scope = angular.element(select).scope();
+          if (scope && scope.ctrl) {
+            scope.$apply(function () {
+              scope.ctrl.itemsPerPage = "ALL";
+              scope.ctrl.onPageSizeSelect();
+            });
+            console.log(TAG, "Pagination set via AngularJS scope");
+            // Give AngularJS time to re-render
+            setTimeout(resolve, 500);
+            return;
+          }
+        } catch (e) {
+          console.warn(TAG, "AngularJS scope approach failed, using DOM fallback:", e);
+        }
+      }
+
+      // DOM fallback
+      select.value = "string:ALL";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      console.log(TAG, "Pagination set via DOM event");
+      setTimeout(resolve, 500);
+    });
+  }
+
+  function waitForElement(selector, timeout) {
+    return new Promise(function (resolve, reject) {
+      var el = document.querySelector(selector);
+      if (el) { resolve(el); return; }
+
+      var observer = new MutationObserver(function () {
+        var found = document.querySelector(selector);
+        if (found) { observer.disconnect(); resolve(found); }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+
+      setTimeout(function () {
+        observer.disconnect();
+        reject(new Error("Timeout waiting for " + selector));
+      }, timeout);
+    });
+  }
+
+  function waitForStableRowCount(timeout) {
+    return new Promise(function (resolve) {
+      var lastCount = 0;
+      var stableTime = 0;
+
+      var interval = setInterval(function () {
+        var count = document.querySelectorAll("tr[gtm-table-row]").length;
+        if (count === lastCount && count > 0) {
+          stableTime += 200;
+          if (stableTime >= 600) {
+            clearInterval(interval);
+            resolve(count);
+          }
+        } else {
+          lastCount = count;
+          stableTime = 0;
+        }
+      }, 200);
+
+      setTimeout(function () {
+        clearInterval(interval);
+        resolve(lastCount);
+      }, timeout);
+    });
+  }
 })();
