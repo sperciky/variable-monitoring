@@ -214,7 +214,7 @@
         console.log(TAG, "URL confirmed, waiting for page render...");
         setTimeout(function () {
           selectVariablesOnPage(variableNames);
-        }, 500);
+        }, 250);
       }).catch(function () {
         console.warn(TAG, "URL did not change, retrying navigation...");
         // Fallback: force hash change directly
@@ -223,7 +223,7 @@
           selectVariablesOnPage(variableNames);
         }, 2000);
       });
-    }, 300);
+    }, 150);
   }
 
   function closeGtmDialogs() {
