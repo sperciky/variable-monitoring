@@ -9,6 +9,17 @@
 
 (function () {
   const TAG = "[GTM Monitor MAIN]";
+
+  // ---- Prevent duplicate initialization -----------------------------
+  // MAIN world scripts persist in the page JS context even after extension
+  // reload. If ensureContentScripts() re-injects this file, skip to avoid
+  // duplicate XHR patches and message listeners.
+  if (window.__gtm_monitor_main_initialized) {
+    console.log(TAG, "Already initialized, skipping duplicate injection");
+    return;
+  }
+  window.__gtm_monitor_main_initialized = true;
+
   console.log(TAG, "Interceptor script loaded at", window.location.href);
 
   // ---- Pending export buffer (survives ISOLATED world invalidation) ---
