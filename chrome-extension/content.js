@@ -131,23 +131,21 @@
 
   // ---- Navigate-and-select: direct message from popup -----------------
   // The popup sends the target hash and variable names directly.
-  // We change the hash (SPA navigation) then relay to MAIN world.
+  // We relay everything to MAIN world which navigates via Angular's
+  // $location service (hash changes from ISOLATED world don't trigger
+  // AngularJS routing properly).
   if (isContextValid()) {
     chrome.runtime.onMessage.addListener(function (msg) {
       if (msg.type !== "navigate-and-select") return;
       console.log(TAG, "navigate-and-select received, hash:", msg.hash,
         "variables:", msg.variableNames.length);
 
-      // Navigate the SPA by changing the hash
-      window.location.hash = msg.hash.replace(/^#/, "");
-
-      // Give the SPA time to render the new view, then relay to MAIN world
-      setTimeout(function () {
-        window.postMessage({
-          type: "__gtm_monitor_select_vars",
-          variableNames: msg.variableNames,
-        }, "*");
-      }, 1000);
+      // Relay to MAIN world — it will handle both navigation and selection
+      window.postMessage({
+        type: "__gtm_monitor_navigate_and_select",
+        hash: msg.hash,
+        variableNames: msg.variableNames,
+      }, "*");
     });
   }
 

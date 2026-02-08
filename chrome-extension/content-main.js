@@ -143,16 +143,49 @@
   }
 
   // ==================================================================
-  // Variable selection on the Variables overview page
-  // Triggered by postMessage from ISOLATED world content script
+  // Navigate + select: triggered from ISOLATED world content script
+  // Navigates via AngularJS $location then selects variables
   // ==================================================================
 
   window.addEventListener("message", function (e) {
     if (e.source !== window) return;
-    if (!e.data || e.data.type !== "__gtm_monitor_select_vars") return;
-    console.log(TAG, "Variable selection request received:", e.data.variableNames.length, "variables");
-    selectVariablesOnPage(e.data.variableNames);
+    if (!e.data) return;
+
+    if (e.data.type === "__gtm_monitor_navigate_and_select") {
+      console.log(TAG, "Navigate-and-select received, hash:", e.data.hash,
+        "variables:", e.data.variableNames.length);
+      navigateAndSelect(e.data.hash, e.data.variableNames);
+    }
   });
+
+  function navigateAndSelect(hash, variableNames) {
+    // Navigate using AngularJS $location for proper routing
+    var path = hash.replace(/^#/, "");
+    console.log(TAG, "Navigating AngularJS to:", path);
+
+    if (typeof angular !== "undefined") {
+      try {
+        var $injector = angular.element(document.body).injector();
+        if ($injector) {
+          $injector.invoke(["$location", "$rootScope", function ($location, $rootScope) {
+            $location.url(path);
+            $rootScope.$apply();
+          }]);
+          console.log(TAG, "Navigation triggered via AngularJS $location.url()");
+        }
+      } catch (err) {
+        console.warn(TAG, "AngularJS navigation failed, falling back to hash:", err);
+        window.location.hash = hash;
+      }
+    } else {
+      window.location.hash = hash;
+    }
+
+    // Wait for navigation to settle, then select variables
+    setTimeout(function () {
+      selectVariablesOnPage(variableNames);
+    }, 1500);
+  }
 
   async function selectVariablesOnPage(names) {
     const nameSet = new Set(names);
