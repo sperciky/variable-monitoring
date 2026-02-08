@@ -190,59 +190,52 @@
     log("Navigate-and-select START");
     var targetPath = hash.replace(/^#/, "");
 
-    // 1. Close any open GTM dialog/sheet that may block navigation
-    var closeBtn = document.querySelector(
-      ".gtm-sheet-header__close-button, " +
-      ".gtm-dialog-header__close-button, " +
-      "gtm-selective-export .gtm-sheet-header button"
+    // Check if a dialog/sheet is open (export dialog, etc.)
+    var hasDialog = !!document.querySelector(
+      "gtm-selective-export, .gtm-sheet, .gtm-dialog"
     );
-    var hadDialog = !!closeBtn;
-    if (closeBtn) {
-      log("Closing open GTM dialog/sheet");
-      closeBtn.click();
+
+    if (hasDialog) {
+      // Dialog is open — hash navigation won't work reliably while Angular
+      // is managing the dialog. Skip all the close/wait/navigate complexity
+      // and go straight to a full page reload at the target URL.
+      log("Dialog detected, saving selection and forcing full page reload");
+      saveAndReload(hash, variableNames);
+      return;
     }
 
-    // 2. Use AngularJS $timeout to wait for the dialog close digest cycle,
-    //    then navigate. This ensures we don't set the hash while Angular
-    //    is still processing the dialog close.
-    function doNavigateAndVerify() {
-      log("Setting window.location.hash");
-      window.location.hash = hash;
+    // No dialog — try in-page hash navigation
+    log("No dialog, attempting in-page navigation");
+    log("Setting window.location.hash");
+    window.location.hash = hash;
 
-      // 3. Verify the URL actually changed — poll for the target path in the hash
-      log("Verifying URL change, target:", targetPath);
-      waitForUrlToContain(targetPath, 3000).then(function () {
-        log("URL confirmed, waiting for variables page elements...");
-        // Use a.wd-variable-name (variables-page-specific) instead of
-        // generic tr[gtm-table-row] which also exists on the admin page
-        return waitForElement("a.wd-variable-name", 15000);
-      }).then(function () {
-        log("Variables page detected, starting selection");
-        selectVariablesOnPage(variableNames);
-      }).catch(function (e) {
-        warn("Navigation failed:", e.message, "— forcing page reload");
-        // Store pending selection in sessionStorage (survives page reload)
-        try {
-          sessionStorage.setItem("__gtm_monitor_pending_selection", JSON.stringify({
-            variableNames: variableNames,
-          }));
-        } catch (e) { /* ignore quota errors */ }
-        window.location.href = "https://tagmanager.google.com/" + hash;
-      });
-    }
+    log("Verifying URL change, target:", targetPath);
+    waitForUrlToContain(targetPath, 3000).then(function () {
+      log("URL confirmed, waiting for variables page elements...");
+      return waitForElement("a.wd-variable-name", 15000);
+    }).then(function () {
+      log("Variables page detected, starting selection");
+      selectVariablesOnPage(variableNames);
+    }).catch(function (e) {
+      warn("In-page navigation failed:", e.message, "— forcing full page reload");
+      saveAndReload(hash, variableNames);
+    });
+  }
 
-    if (hadDialog) {
-      // Wait for the dialog/sheet element to actually disappear from the DOM,
-      // rather than relying on $timeout which fires before Angular processes
-      // the close button click.
-      log("Waiting for dialog to disappear from DOM...");
-      waitForDialogClose(5000).then(function () {
-        log("Dialog closed, proceeding with navigation");
-        doNavigateAndVerify();
-      });
-    } else {
-      setTimeout(doNavigateAndVerify, 100);
+  function saveAndReload(hash, variableNames) {
+    try {
+      sessionStorage.setItem("__gtm_monitor_pending_selection", JSON.stringify({
+        variableNames: variableNames,
+      }));
+      log("Saved", variableNames.length, "variable names to sessionStorage");
+    } catch (e) {
+      err("Failed to save to sessionStorage:", e);
     }
+    // Set the hash first, then force a real page reload.
+    // Just setting href to the same origin + different hash does NOT reload.
+    window.location.hash = hash;
+    log("Hash set, forcing page reload...");
+    window.location.reload();
   }
 
   function waitForUrlToContain(targetPath, timeout) {
@@ -263,36 +256,6 @@
         if (elapsed >= timeout) {
           clearInterval(interval);
           reject(new Error("URL did not change to " + targetPath + " within " + timeout + "ms (current: " + window.location.hash + ")"));
-        }
-      }, 100);
-    });
-  }
-
-  function waitForDialogClose(timeout) {
-    return new Promise(function (resolve) {
-      var selector = "gtm-selective-export, .gtm-sheet, .gtm-dialog";
-
-      // If no dialog element exists, resolve immediately
-      if (!document.querySelector(selector)) {
-        log("Dialog already gone");
-        resolve();
-        return;
-      }
-
-      var elapsed = 0;
-      var interval = setInterval(function () {
-        if (!document.querySelector(selector)) {
-          clearInterval(interval);
-          log("Dialog disappeared after", elapsed, "ms");
-          // Small extra delay for Angular to finish its post-removal digest
-          setTimeout(resolve, 200);
-          return;
-        }
-        elapsed += 100;
-        if (elapsed >= timeout) {
-          clearInterval(interval);
-          warn("Dialog did not close within", timeout, "ms, proceeding anyway");
-          resolve();
         }
       }, 100);
     });
@@ -335,20 +298,34 @@
 
       // 4. Collect all checkboxes to click, then click in batches
       log("Finding checkboxes to click...");
+      log("Target variable names:", Array.from(nameSet).slice(0, 5), "... (" + nameSet.size + " total)");
       const toClick = [];
       const rows = document.querySelectorAll("tr[gtm-table-row]");
+      var rowsWithLink = 0;
+      var nameMatches = 0;
+      var checkboxIssues = 0;
+      var sampleDomNames = [];
       for (const row of rows) {
         const nameLink = row.querySelector("a.wd-variable-name");
         if (!nameLink) continue;
+        rowsWithLink++;
         const varName = nameLink.textContent.trim();
+        if (sampleDomNames.length < 5) sampleDomNames.push(varName);
         if (nameSet.has(varName)) {
+          nameMatches++;
           const checkbox = row.querySelector("gtm-table-row-checkbox i");
-          if (checkbox && !checkbox.classList.contains("gtm-check-box-icon")) {
+          if (!checkbox) {
+            checkboxIssues++;
+            log("No checkbox <i> found for matched variable:", varName);
+          } else {
             toClick.push(checkbox);
           }
         }
       }
-      log("Found", toClick.length, "checkboxes, clicking...");
+      log("Rows with a.wd-variable-name:", rowsWithLink, "of", rows.length);
+      log("Sample DOM variable names:", sampleDomNames);
+      log("Name matches:", nameMatches, "Checkbox issues:", checkboxIssues);
+      log("Found", toClick.length, "checkboxes to click");
 
       // Click in batches of 10 with a small yield between batches
       const BATCH = 10;
