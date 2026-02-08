@@ -110,11 +110,13 @@
       parts.push("Workspace " + meta.sourceId);
     }
 
-    // Container ID
-    if (meta.containerId) {
+    // Container name from containerVersion.container.name
+    const cv = containerData && containerData.containerVersion;
+    const containerName = cv && cv.container && cv.container.name;
+    if (containerName) {
+      parts.push(containerName);
+    } else if (meta.containerId) {
       parts.push("CTR-" + meta.containerId);
-    } else if (containerData && containerData.containerVersion && containerData.containerVersion.containerId) {
-      parts.push("CTR-" + containerData.containerVersion.containerId);
     }
 
     return parts.length > 0 ? parts.join(" | ") : "Export";
