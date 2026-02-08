@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>GTM Variable Monitor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="popup-root">
+    <!-- Header -->
+    <header class="header">
+      <h1 class="header__title">GTM Variable Monitor</h1>
+      <div class="header__controls">
+        <label class="toggle" title="Enable / disable extension">
+          <input type="checkbox" id="toggle-enabled" checked>
+          <span class="toggle__slider"></span>
+        </label>
+        <button id="btn-detach" class="btn btn--icon" title="Open in separate window">&#x2197;</button>
+      </div>
+    </header>
+
+    <!-- Status bar -->
+    <div id="status-bar" class="status-bar">
+      <span id="status-text">Ready</span>
+    </div>
+
+    <!-- Container info (shown after detection) -->
+    <div id="container-info" class="container-info hidden"></div>
+
+    <!-- Action bar -->
+    <div class="action-bar">
+      <button id="btn-run" class="btn btn--primary" disabled>Run Analysis</button>
+    </div>
+
+    <!-- Results area -->
+    <div id="results" class="results hidden">
+
+      <!-- Summary cards -->
+      <div id="summary-cards" class="summary-cards"></div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab tab--active" data-tab="unused-vars">Unused Variables</button>
+        <button class="tab" data-tab="duplicates">Duplicates</button>
+        <button class="tab" data-tab="unused-tpl">Unused Templates</button>
+      </div>
+
+      <!-- Tab panels -->
+      <div id="panel-unused-vars" class="panel panel--active"></div>
+      <div id="panel-duplicates" class="panel"></div>
+      <div id="panel-unused-tpl" class="panel"></div>
+    </div>
+
+    <!-- Disabled overlay -->
+    <div id="disabled-overlay" class="disabled-overlay hidden">
+      <p>Extension is disabled.</p>
+      <p>Toggle the switch above to enable.</p>
+    </div>
+  </div>
+
+  <script src="analyzer.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
