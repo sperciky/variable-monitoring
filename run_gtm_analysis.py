@@ -19,45 +19,24 @@ import re
 import json
 
 
-def validate_filename(file_path):
+def clean_output_path(file_path):
     """
-    Validate that the filename doesn't contain copy indicators like (1), (2), etc.
-    These appear when files are duplicated by the OS (e.g., downloaded twice)
-    and often cause issues with shell parsing and indicate stale data.
+    Strip OS copy indicators like (1), (2) from a file path so that
+    generated output files get clean names even when the input file
+    was downloaded multiple times (e.g., "export (1).json").
+    Returns the cleaned path (same directory, cleaned basename).
     """
+    dirname = os.path.dirname(file_path)
     basename = os.path.basename(file_path)
 
-    # Match patterns like (1), (2), (10), etc. — typical OS copy suffixes
-    copy_pattern = re.compile(r'\(\d+\)')
-    match = copy_pattern.search(basename)
+    copy_pattern = re.compile(r'\s*\(\d+\)')
+    clean_name = copy_pattern.sub('', basename)
+    # Collapse any resulting double spaces or leading/trailing spaces
+    clean_name = re.sub(r'  +', ' ', clean_name).strip()
+    # Handle case where space remains before extension: "file .json" -> "file.json"
+    clean_name = re.sub(r' \.', '.', clean_name)
 
-    if match:
-        # Build a suggested clean name by removing the copy indicator
-        clean_name = copy_pattern.sub('', basename)
-        # Collapse any resulting double spaces or leading/trailing spaces
-        clean_name = re.sub(r'  +', ' ', clean_name).strip()
-        # Handle case where (1) was right before the extension: "file (1).json" -> "file.json"
-        clean_name = re.sub(r' \.', '.', clean_name)
-
-        print(f"ERROR: The filename '{basename}' contains a copy indicator '{match.group()}'.")
-        print(f"  This usually means the file is a duplicate created by your OS")
-        print(f"  (e.g., a second download of the same file).")
-        print()
-        print(f"  Suggested actions:")
-        print(f"    1. Rename the file to: {clean_name}")
-        print(f"    2. Or verify you are using the correct (original) export file.")
-        print()
-
-        clean_path = os.path.join(os.path.dirname(file_path), clean_name)
-        if os.path.exists(clean_path):
-            print(f"  NOTE: The clean-named file '{clean_name}' already exists in the same directory.")
-            print(f"  You may want to use that one instead:")
-            print(f"    python {os.path.basename(__file__)} \"{clean_path}\"")
-        else:
-            print(f"  To rename, run:")
-            print(f"    mv \"{file_path}\" \"{clean_path}\"")
-
-        sys.exit(1)
+    return os.path.join(dirname, clean_name) if dirname else clean_name
 
 
 def run_analyzer(file_path, debug_mode=False, include_paused=True):
@@ -110,8 +89,9 @@ def run_analyzer(file_path, debug_mode=False, include_paused=True):
     report['trigger_evaluation_impact'] = trigger_impact
     report['tag_evaluation_impact'] = tag_impact
 
-    # Save report to JSON file
-    output_file = file_path.replace('.json', '_analysis_report.json')
+    # Save report to JSON file — use cleaned path so copy indicators like (1) are stripped
+    clean_path = clean_output_path(file_path)
+    output_file = clean_path.replace('.json', '_analysis_report.json')
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(report, f, indent=2)
 
@@ -183,9 +163,6 @@ def main():
     if not file_path.endswith('.json'):
         print(f"ERROR: Input file must be a .json GTM export file.")
         sys.exit(1)
-
-    # Check for copy indicators in filename
-    validate_filename(file_path)
 
     # --- Step 1: Run the GTM Analyzer ---
     print("=" * 80)
