@@ -420,11 +420,36 @@ $btnSelUnused.addEventListener("click", async () => {
   // (chrome.tabs.update with hash-only change doesn't trigger SPA navigation)
   if (currentTab) {
     const hash = new URL(varsUrl).hash;
-    chrome.tabs.sendMessage(currentTab.id, {
+    const message = {
       type: "navigate-and-select",
       hash: hash,
       variableNames: variableNames,
-    });
+    };
+
+    try {
+      await chrome.tabs.sendMessage(currentTab.id, message);
+    } catch (err) {
+      // Content script not available — inject it on-demand and retry
+      console.warn("Content script not reachable, injecting on-demand:", err.message);
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: currentTab.id },
+          files: ["content-main.js"],
+          world: "MAIN",
+        });
+        await chrome.scripting.executeScript({
+          target: { tabId: currentTab.id },
+          files: ["content.js"],
+        });
+        // Small delay to let scripts initialize
+        await new Promise(r => setTimeout(r, 300));
+        await chrome.tabs.sendMessage(currentTab.id, message);
+      } catch (retryErr) {
+        console.error("Retry after injection also failed:", retryErr);
+        setStatus("Please refresh the GTM page and try again", "error");
+        return;
+      }
+    }
   }
 
   setStatus(`Navigating to select ${variableNames.length} variables...`, "success");
