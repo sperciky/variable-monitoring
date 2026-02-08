@@ -10,6 +10,11 @@
   const TAG = "[GTM Monitor ISOLATED]";
   const MAX_EXPORTS = 20;
 
+  // Guard: after extension reload, old content scripts lose chrome API access
+  function isContextValid() {
+    try { return !!chrome.runtime.id; } catch (e) { return false; }
+  }
+
   console.log(TAG, "Content script loaded at", window.location.href);
 
   // ---- URL param detection ------------------------------------------
@@ -29,14 +34,15 @@
   }
 
   const params = detectParams();
-  if (params) {
+  if (params && isContextValid()) {
     console.log(TAG, "GTM params detected:", params);
     chrome.runtime.sendMessage({ type: "gtm-params-detected", params });
-  } else {
+  } else if (!params) {
     console.log(TAG, "No GTM params found in hash:", window.location.hash);
   }
 
   window.addEventListener("hashchange", () => {
+    if (!isContextValid()) return;
     const p = detectParams();
     if (p) {
       console.log(TAG, "GTM params updated on hashchange:", p);
@@ -49,6 +55,7 @@
     // Only accept messages from the same window (our MAIN world script)
     if (e.source !== window) return;
     if (!e.data || e.data.type !== "__gtm_monitor_export") return;
+    if (!isContextValid()) { console.warn(TAG, "Context invalidated, refresh the page"); return; }
 
     console.log(TAG, "Received export data via postMessage, length:", (e.data.containerData || "").length);
 
@@ -154,20 +161,25 @@
     }
   }
 
-  // Check on hashchange (SPA navigation)
+  // Check on hashchange (SPA navigation) — also used for param detection above,
+  // but this separate listener is specifically for the selection task
   window.addEventListener("hashchange", () => {
+    if (!isContextValid()) return;
     setTimeout(checkPendingSelection, 500);
   });
 
   // Check on storage change (task stored while already on page)
-  chrome.storage.onChanged.addListener(function (changes) {
-    if (changes.pendingVariableSelection && changes.pendingVariableSelection.newValue) {
-      setTimeout(checkPendingSelection, 500);
-    }
-  });
+  if (isContextValid()) {
+    chrome.storage.onChanged.addListener(function (changes) {
+      if (!isContextValid()) return;
+      if (changes.pendingVariableSelection && changes.pendingVariableSelection.newValue) {
+        setTimeout(checkPendingSelection, 500);
+      }
+    });
 
-  // Check on init (page reload with pending task)
-  checkPendingSelection();
+    // Check on init (page reload with pending task)
+    checkPendingSelection();
+  }
 
   console.log(TAG, "All listeners registered, waiting for export data...");
 })();
