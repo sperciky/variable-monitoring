@@ -175,8 +175,23 @@ body.detached {
   background: #fff;
   border-bottom: 1px solid #dadce0;
   display: flex;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
+.gtm-warning {
+  font-size: 12px;
+  color: #d93025;
+  padding: 4px 8px;
+  background: #fce8e6;
+  border-radius: 4px;
+}
+.gtm-warning a {
+  color: #1a73e8;
+  text-decoration: none;
+  font-weight: 500;
+}
+.gtm-warning a:hover { text-decoration: underline; }
 
 /* ------------------------------------------------------------------ */
 /* Summary cards                                                       */
