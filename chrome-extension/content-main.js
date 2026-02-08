@@ -167,11 +167,14 @@
       try {
         var $injector = angular.element(document.body).injector();
         if ($injector) {
-          $injector.invoke(["$location", "$rootScope", function ($location, $rootScope) {
-            $location.url(path);
-            $rootScope.$apply();
+          // Use $timeout to safely run outside any current digest cycle
+          // ($rootScope.$apply throws if a digest is already in progress)
+          $injector.invoke(["$location", "$timeout", function ($location, $timeout) {
+            $timeout(function () {
+              $location.url(path);
+            });
           }]);
-          console.log(TAG, "Navigation triggered via AngularJS $location.url()");
+          console.log(TAG, "Navigation triggered via AngularJS $timeout + $location.url()");
         }
       } catch (err) {
         console.warn(TAG, "AngularJS navigation failed, falling back to hash:", err);
