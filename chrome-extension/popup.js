@@ -146,8 +146,10 @@ async function runAnalysis() {
 }
 
 // ---- Fetch container JSON via GTM internal API ----------------------
+// The fetch MUST run in the page's JS context (world: "MAIN") so that
+// the browser sends the same session cookies and XSRF tokens as the
+// GTM UI itself.  We use chrome.scripting.executeScript for this.
 async function fetchContainerJson(params) {
-  // Build the partial-export URL
   let apiUrl;
   if (params.containerDraftId) {
     apiUrl = `https://tagmanager.google.com/api/accounts/${params.accountId}/containers/${params.containerId}/workspaces/${params.containerDraftId}/partialexport`;
@@ -157,26 +159,46 @@ async function fetchContainerJson(params) {
     throw new Error("No workspace draft or version ID found in URL");
   }
 
-  // POST with empty key list = export everything
-  const resp = await fetch(apiUrl, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ key: [], retainFolderStructure: true }),
-  });
-
-  if (!resp.ok) {
-    if (resp.status === 401 || resp.status === 403) {
-      throw new Error("Not authorized. Make sure you are logged in to GTM.");
-    }
-    throw new Error(`API returned ${resp.status}`);
+  if (!currentTab || !currentTab.id) {
+    throw new Error("No active GTM tab found");
   }
 
-  const data = await resp.json();
-  // The response wraps the JSON string in data.default.exportedContainerJson
-  const jsonStr = (data.default || data).exportedContainerJson;
-  if (!jsonStr) throw new Error("No exportedContainerJson in API response");
-  return JSON.parse(jsonStr);
+  // Execute fetch inside the page context so cookies/XSRF are included
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: currentTab.id },
+    world: "MAIN",
+    func: async (url) => {
+      try {
+        const resp = await fetch(url, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: [], retainFolderStructure: true }),
+        });
+        if (!resp.ok) {
+          return { error: `API returned ${resp.status} ${resp.statusText}` };
+        }
+        const data = await resp.json();
+        const jsonStr = (data.default || data).exportedContainerJson;
+        if (!jsonStr) {
+          return { error: "No exportedContainerJson in API response" };
+        }
+        return { data: JSON.parse(jsonStr) };
+      } catch (e) {
+        return { error: e.message || String(e) };
+      }
+    },
+    args: [apiUrl],
+  });
+
+  const result = results && results[0] && results[0].result;
+  if (!result) {
+    throw new Error("Failed to execute script in page context");
+  }
+  if (result.error) {
+    throw new Error(result.error);
+  }
+  return result.data;
 }
 
 // ---- Status helpers -------------------------------------------------
