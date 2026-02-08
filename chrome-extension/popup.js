@@ -17,6 +17,7 @@ const $select    = document.getElementById("select-export");
 const $btnClear  = document.getElementById("btn-clear-history");
 const $resActs   = document.getElementById("results-actions");
 const $btnSelUnused = document.getElementById("btn-select-unused");
+const $gtmWarn   = document.getElementById("gtm-warning");
 const panelIds   = ["unused-vars", "duplicates", "unused-tpl"];
 
 // ---- State ----------------------------------------------------------
@@ -396,15 +397,17 @@ function renderResults(result) {
     card.addEventListener("click", () => activateTab(card.dataset.tab));
   });
 
-  // Show/hide "Select Unused Variables" button
+  // Show/hide "Select Unused Variables" button + GTM warning
   if (unusedVariables.length > 0) {
     $resActs.classList.remove("hidden");
     if (!isOnGtmPage()) {
       $btnSelUnused.disabled = true;
       $btnSelUnused.title = "Navigate to tagmanager.google.com first";
+      $gtmWarn.classList.remove("hidden");
     } else {
       $btnSelUnused.disabled = false;
       $btnSelUnused.title = "";
+      $gtmWarn.classList.add("hidden");
     }
   } else {
     $resActs.classList.add("hidden");
