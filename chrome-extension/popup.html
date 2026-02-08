@@ -11,6 +11,7 @@
     <header class="header">
       <h1 class="header__title">GTM Variable Monitor</h1>
       <div class="header__controls">
+        <button id="btn-help" class="btn btn--icon btn--help" title="How to use this extension">?</button>
         <label class="toggle" title="Enable / disable extension">
           <input type="checkbox" id="toggle-enabled" checked>
           <span class="toggle__slider"></span>
@@ -68,6 +69,87 @@
     <div id="disabled-overlay" class="disabled-overlay hidden">
       <p>Extension is disabled.</p>
       <p>Toggle the switch above to enable.</p>
+    </div>
+
+    <!-- Tutorial overlay -->
+    <div id="tutorial-overlay" class="tutorial-overlay hidden">
+      <div class="tutorial">
+        <div class="tutorial__header">
+          <h2 class="tutorial__title">How to use GTM Variable Monitor</h2>
+          <button id="btn-close-tutorial" class="tutorial__close" title="Close">&times;</button>
+        </div>
+        <div class="tutorial__content">
+
+          <div class="tutorial__section">
+            <h3 class="tutorial__section-title">Getting export data</h3>
+
+            <div class="tutorial__step">
+              <div class="tutorial__step-num">0</div>
+              <div class="tutorial__step-body">
+                <p>Navigate to <a href="https://tagmanager.google.com" target="_blank">tagmanager.google.com</a> and open the container you want to analyze.</p>
+              </div>
+            </div>
+
+            <div class="tutorial__step">
+              <div class="tutorial__step-num">1</div>
+              <div class="tutorial__step-body">
+                <p>Choose the <strong>Admin</strong> tab from the top navigation.</p>
+                <img src="tutorial/tutorial-step1.png" alt="Step 1: Choose Admin Tab" class="tutorial__img">
+              </div>
+            </div>
+
+            <div class="tutorial__step">
+              <div class="tutorial__step-num">2</div>
+              <div class="tutorial__step-body">
+                <p>Click on <strong>Export Container</strong> from the right menu.</p>
+                <img src="tutorial/tutorial-step2.png" alt="Step 2: Click Export Container" class="tutorial__img">
+              </div>
+            </div>
+
+            <div class="tutorial__step">
+              <div class="tutorial__step-num">3</div>
+              <div class="tutorial__step-body">
+                <p>Select either a <strong>previously published version</strong> or any of the current <strong>workspaces</strong>.</p>
+                <img src="tutorial/tutorial-step3.png" alt="Step 3: Choose version or workspace" class="tutorial__img">
+              </div>
+            </div>
+
+            <div class="tutorial__step">
+              <div class="tutorial__step-num">4</div>
+              <div class="tutorial__step-body">
+                <p>Click the <strong>Preview JSON</strong> button. The extension will automatically intercept the export data.</p>
+                <img src="tutorial/tutorial-step4.png" alt="Step 4: Click Preview JSON" class="tutorial__img">
+              </div>
+            </div>
+          </div>
+
+          <div class="tutorial__section">
+            <h3 class="tutorial__section-title">Running the analysis</h3>
+
+            <div class="tutorial__step">
+              <div class="tutorial__step-num">5</div>
+              <div class="tutorial__step-body">
+                <p>Open the extension popup. The intercepted export will appear in the <strong>Export data</strong> dropdown. Select it and click <strong>Run Analysis</strong>.</p>
+              </div>
+            </div>
+
+            <div class="tutorial__step">
+              <div class="tutorial__step-num">6</div>
+              <div class="tutorial__step-body">
+                <p>Review the results in the three tabs: <strong>Unused Variables</strong>, <strong>Duplicates</strong>, and <strong>Unused Templates</strong>. Click the summary cards to switch between tabs.</p>
+              </div>
+            </div>
+
+            <div class="tutorial__step">
+              <div class="tutorial__step-num">7</div>
+              <div class="tutorial__step-body">
+                <p>To auto-select unused variables for deletion, make sure you are on the GTM page and click <strong>Select Unused Variables in GTM</strong>. The extension will navigate to the variables overview and check the matching rows.</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
     </div>
   </div>
 

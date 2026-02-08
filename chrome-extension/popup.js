@@ -18,6 +18,9 @@ const $btnClear  = document.getElementById("btn-clear-history");
 const $resActs   = document.getElementById("results-actions");
 const $btnSelUnused = document.getElementById("btn-select-unused");
 const $gtmWarn   = document.getElementById("gtm-warning");
+const $btnHelp   = document.getElementById("btn-help");
+const $tutorial  = document.getElementById("tutorial-overlay");
+const $btnCloseTut = document.getElementById("btn-close-tutorial");
 const panelIds   = ["unused-vars", "duplicates", "unused-tpl"];
 
 // ---- State ----------------------------------------------------------
@@ -317,6 +320,18 @@ function applyEnabledState(enabled) {
     $overlay.classList.remove("hidden");
   }
 }
+
+// ---- Tutorial -------------------------------------------------------
+$btnHelp.addEventListener("click", () => {
+  $tutorial.classList.remove("hidden");
+});
+$btnCloseTut.addEventListener("click", () => {
+  $tutorial.classList.add("hidden");
+});
+$tutorial.addEventListener("click", (e) => {
+  // Close when clicking the backdrop (outside the tutorial card)
+  if (e.target === $tutorial) $tutorial.classList.add("hidden");
+});
 
 // ---- Detach ---------------------------------------------------------
 $btnDetach.addEventListener("click", () => {
