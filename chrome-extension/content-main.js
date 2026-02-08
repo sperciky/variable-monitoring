@@ -205,10 +205,39 @@
       log("Setting window.location.hash");
       window.location.hash = hash;
 
-      // 3. Start selecting once the table appears
-      log("Starting selectVariablesOnPage()");
-      selectVariablesOnPage(variableNames);
+      // The admin page also has tr[gtm-table-row], so we must wait for the
+      // old rows to disappear (SPA route transition) before looking for new ones.
+      var existingRows = document.querySelectorAll("tr[gtm-table-row]").length;
+      if (existingRows > 0) {
+        log("Found", existingRows, "existing rows, waiting for route transition...");
+        waitForRowsToDisappear(5000).then(function () {
+          log("Old rows cleared, starting selectVariablesOnPage()");
+          selectVariablesOnPage(variableNames);
+        });
+      } else {
+        log("No existing rows, starting selectVariablesOnPage()");
+        selectVariablesOnPage(variableNames);
+      }
     }, 150);
+  }
+
+  function waitForRowsToDisappear(timeout) {
+    return new Promise(function (resolve) {
+      var elapsed = 0;
+      var interval = setInterval(function () {
+        var count = document.querySelectorAll("tr[gtm-table-row]").length;
+        if (count === 0) {
+          clearInterval(interval);
+          resolve();
+        }
+        elapsed += 100;
+        if (elapsed >= timeout) {
+          clearInterval(interval);
+          log("waitForRowsToDisappear timed out, proceeding anyway");
+          resolve();
+        }
+      }, 100);
+    });
   }
 
   async function selectVariablesOnPage(names) {
