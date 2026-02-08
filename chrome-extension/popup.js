@@ -12,12 +12,16 @@ const $ctrInfo   = document.getElementById("container-info");
 const $results   = document.getElementById("results");
 const $summary   = document.getElementById("summary-cards");
 const $overlay   = document.getElementById("disabled-overlay");
+const $exportSel = document.getElementById("export-selector");
+const $select    = document.getElementById("select-export");
+const $btnClear  = document.getElementById("btn-clear-history");
 const panelIds   = ["unused-vars", "duplicates", "unused-tpl"];
 
 // ---- State ----------------------------------------------------------
 let currentTab  = null;    // active chrome tab
 let gtmParams   = null;    // { accountId, containerId, containerDraftId | containerVersionId }
 let analysisResult = null; // result from analyzeContainer()
+let exportHistory  = [];   // array of export entries from storage
 
 // ---- Init -----------------------------------------------------------
 (async function init() {
@@ -50,13 +54,13 @@ let analysisResult = null; // result from analyzeContainer()
   if (gtmParams) {
     $ctrInfo.textContent = `Account: ${gtmParams.accountId}  |  Container: ${gtmParams.containerId}`;
     $ctrInfo.classList.remove("hidden");
-    $btnRun.disabled = false;
-    // Check if we already have intercepted data
-    await checkForInterceptedData();
   } else {
     setStatus("Navigate to a GTM container page first", "error");
     $btnRun.disabled = true;
   }
+
+  // Load export history
+  await loadExportHistory();
 
   // If we have a cached analysis result for this container, show it
   const { cachedResult, cachedParams } = await chrome.storage.local.get(["cachedResult", "cachedParams"]);
@@ -69,28 +73,89 @@ let analysisResult = null; // result from analyzeContainer()
   }
 })();
 
-// ---- Check for intercepted export data ------------------------------
-async function checkForInterceptedData() {
-  const { interceptedExport, interceptedAt } = await chrome.storage.local.get(["interceptedExport", "interceptedAt"]);
-  if (interceptedExport && interceptedAt) {
-    const age = Date.now() - interceptedAt;
-    const mins = Math.floor(age / 60000);
-    if (age < 3600000) { // less than 1 hour old
-      setStatus(`Export data captured ${mins < 1 ? "just now" : mins + "m ago"} — click Run Analysis`, "success");
-    } else {
-      setStatus("GTM container detected — click Export in GTM, then Run Analysis", "");
+// ---- Load and render export history ---------------------------------
+async function loadExportHistory() {
+  const result = await chrome.storage.local.get({ exportHistory: [] });
+  exportHistory = result.exportHistory;
+  renderExportSelector();
+}
+
+function renderExportSelector() {
+  $select.innerHTML = "";
+
+  if (exportHistory.length === 0) {
+    $exportSel.classList.add("hidden");
+    $btnRun.disabled = true;
+    if (gtmParams) {
+      setStatus("GTM container detected \u2014 click Export in GTM, then Run Analysis", "");
     }
-  } else {
-    setStatus("GTM container detected — click Export in GTM, then Run Analysis", "");
+    return;
   }
+
+  $exportSel.classList.remove("hidden");
+  $btnRun.disabled = false;
+
+  for (const entry of exportHistory) {
+    const opt = document.createElement("option");
+    opt.value = entry.id;
+    opt.textContent = formatEntryLabel(entry);
+    $select.appendChild(opt);
+  }
+
+  // Auto-select newest (first)
+  $select.selectedIndex = 0;
+  updateStatusFromSelection();
+}
+
+function formatEntryLabel(entry) {
+  const age = timeAgo(entry.timestamp);
+  return `${entry.label}  (${age})`;
+}
+
+function timeAgo(ts) {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return mins + "m ago";
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + "h ago";
+  const days = Math.floor(hrs / 24);
+  return days + "d ago";
+}
+
+function updateStatusFromSelection() {
+  const entry = getSelectedEntry();
+  if (entry) {
+    const age = timeAgo(entry.timestamp);
+    setStatus(`Selected: ${entry.label} (${age}) \u2014 click Run Analysis`, "success");
+  }
+}
+
+function getSelectedEntry() {
+  const id = $select.value;
+  return exportHistory.find(e => e.id === id) || null;
 }
 
 // ---- Listen for new intercepted data while popup is open -------------
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "export-intercepted") {
-    setStatus("Export data captured — click Run Analysis", "success");
+    // Reload history to pick up the new entry
+    loadExportHistory();
   }
 });
+
+// ---- Clear export history -------------------------------------------
+$btnClear.addEventListener("click", async () => {
+  await chrome.storage.local.set({ exportHistory: [] });
+  exportHistory = [];
+  renderExportSelector();
+  $results.classList.add("hidden");
+  analysisResult = null;
+  setStatus("Export history cleared", "");
+});
+
+// ---- Export selector change -----------------------------------------
+$select.addEventListener("change", updateStatusFromSelection);
 
 // ---- URL Parsing ----------------------------------------------------
 function parseGTMUrl(url) {
@@ -148,45 +213,32 @@ $btnDetach.addEventListener("click", () => {
 $btnRun.addEventListener("click", runAnalysis);
 
 async function runAnalysis() {
-  if (!gtmParams) return;
   $btnRun.disabled = true;
   setStatus("Looking for container data...", "");
 
   try {
-    const gtmJson = await getContainerData();
-    setStatus("Analyzing...", "");
-    analysisResult = window.GTMAnalyzer.analyzeContainer(gtmJson, true);
+    const entry = getSelectedEntry();
+    if (!entry) {
+      throw new Error(
+        "No export selected. In GTM, go to Admin > Export Container, " +
+        "select all items, then click \"Export\" or \"Preview\"."
+      );
+    }
+
+    setStatus("Analyzing " + entry.label + "...", "");
+    analysisResult = window.GTMAnalyzer.analyzeContainer(entry.containerData, true);
 
     // Cache for detached window
     chrome.storage.local.set({ cachedResult: analysisResult, cachedParams: gtmParams });
 
     renderResults(analysisResult);
-    setStatus("Analysis complete", "success");
+    setStatus("Analysis complete \u2014 " + entry.label, "success");
   } catch (err) {
     console.error("Analysis error:", err);
     setStatus(`Error: ${err.message}`, "error");
   } finally {
     $btnRun.disabled = false;
   }
-}
-
-// ---- Get container data (from intercepted export) -------------------
-async function getContainerData() {
-  // Check for intercepted partialexport data
-  const { interceptedExport, interceptedAt } = await chrome.storage.local.get(["interceptedExport", "interceptedAt"]);
-
-  if (interceptedExport && interceptedAt) {
-    const age = Date.now() - interceptedAt;
-    if (age < 3600000) { // Accept data up to 1 hour old
-      return interceptedExport;
-    }
-  }
-
-  throw new Error(
-    "No export data available. In GTM, go to Admin > Export Container, " +
-    "select all items, then click \"Export\" or \"Preview\". " +
-    "The extension will automatically capture the data."
-  );
 }
 
 // ---- Status helpers -------------------------------------------------
