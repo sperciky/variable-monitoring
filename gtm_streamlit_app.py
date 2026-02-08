@@ -230,24 +230,6 @@ def create_improvement_recommendations(data: dict) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Filename validation
-# ---------------------------------------------------------------------------
-def validate_filename(name: str) -> str | None:
-    """Return an error message if the filename looks like a OS copy, else None."""
-    match = re.search(r"\(\d+\)", name)
-    if match:
-        clean = re.sub(r"\(\d+\)", "", name)
-        clean = re.sub(r"  +", " ", clean).strip()
-        clean = re.sub(r" \.", ".", clean)
-        return (
-            f"The filename **{name}** contains a copy indicator `{match.group()}`.\n\n"
-            f"This usually means the file is a duplicate created by your OS "
-            f"(e.g. a second download). Please rename it to **{clean}** or upload the original file."
-        )
-    return None
-
-
-# ---------------------------------------------------------------------------
 # Run analysis
 # ---------------------------------------------------------------------------
 @st.cache_data(show_spinner="Running GTM analysis...")
@@ -581,12 +563,6 @@ def main():
 
     if uploaded is None:
         st.info("Upload a GTM container JSON export to get started.")
-        return
-
-    # Validate filename
-    error = validate_filename(uploaded.name)
-    if error:
-        st.error(error)
         return
 
     file_bytes = uploaded.getvalue()
