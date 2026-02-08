@@ -188,6 +188,7 @@
 
   function navigateAndSelect(hash, variableNames) {
     log("Navigate-and-select START");
+    var targetPath = hash.replace(/^#/, "");
 
     // 1. Close any open GTM dialog/sheet that may block navigation
     var closeBtn = document.querySelector(
@@ -195,49 +196,93 @@
       ".gtm-dialog-header__close-button, " +
       "gtm-selective-export .gtm-sheet-header button"
     );
+    var hadDialog = !!closeBtn;
     if (closeBtn) {
       log("Closing open GTM dialog/sheet");
       closeBtn.click();
     }
 
-    // 2. Small delay for dialog close, then navigate via hash (reliable from MAIN world)
-    setTimeout(function () {
+    // 2. Use AngularJS $timeout to wait for the dialog close digest cycle,
+    //    then navigate. This ensures we don't set the hash while Angular
+    //    is still processing the dialog close.
+    function doNavigateAndVerify() {
       log("Setting window.location.hash");
       window.location.hash = hash;
 
-      // The admin page also has tr[gtm-table-row], so we must wait for the
-      // old rows to disappear (SPA route transition) before looking for new ones.
-      var existingRows = document.querySelectorAll("tr[gtm-table-row]").length;
-      if (existingRows > 0) {
-        log("Found", existingRows, "existing rows, waiting for route transition...");
-        waitForRowsToDisappear(5000).then(function () {
-          log("Old rows cleared, starting selectVariablesOnPage()");
-          selectVariablesOnPage(variableNames);
-        });
-      } else {
-        log("No existing rows, starting selectVariablesOnPage()");
+      // 3. Verify the URL actually changed — poll for the target path in the hash
+      log("Verifying URL change, target:", targetPath);
+      waitForUrlToContain(targetPath, 3000).then(function () {
+        log("URL confirmed, waiting for variables page elements...");
+        // Use a.wd-variable-name (variables-page-specific) instead of
+        // generic tr[gtm-table-row] which also exists on the admin page
+        return waitForElement("a.wd-variable-name", 15000);
+      }).then(function () {
+        log("Variables page detected, starting selection");
         selectVariablesOnPage(variableNames);
+      }).catch(function (e) {
+        warn("Navigation failed:", e.message, "— forcing page reload");
+        // Store pending selection so it survives reload
+        window.__gtm_monitor_pending_selection = {
+          hash: hash,
+          variableNames: variableNames,
+        };
+        window.location.href = "https://tagmanager.google.com/" + hash;
+      });
+    }
+
+    if (hadDialog && typeof angular !== "undefined") {
+      // Use AngularJS $timeout to defer navigation until after dialog close digest
+      try {
+        var $injector = angular.element(document.body).injector();
+        if ($injector) {
+          $injector.invoke(["$timeout", function ($timeout) {
+            $timeout(function () {
+              log("$timeout fired after dialog close digest");
+              doNavigateAndVerify();
+            });
+          }]);
+          return;
+        }
+      } catch (e) {
+        warn("AngularJS $timeout failed:", e);
       }
-    }, 150);
+    }
+
+    // No dialog or no Angular — use simple delay
+    setTimeout(doNavigateAndVerify, hadDialog ? 500 : 100);
   }
 
-  function waitForRowsToDisappear(timeout) {
-    return new Promise(function (resolve) {
+  function waitForUrlToContain(targetPath, timeout) {
+    return new Promise(function (resolve, reject) {
+      // Check immediately
+      if (window.location.hash.indexOf(targetPath) >= 0) {
+        resolve();
+        return;
+      }
       var elapsed = 0;
       var interval = setInterval(function () {
-        var count = document.querySelectorAll("tr[gtm-table-row]").length;
-        if (count === 0) {
+        if (window.location.hash.indexOf(targetPath) >= 0) {
           clearInterval(interval);
           resolve();
+          return;
         }
         elapsed += 100;
         if (elapsed >= timeout) {
           clearInterval(interval);
-          log("waitForRowsToDisappear timed out, proceeding anyway");
-          resolve();
+          reject(new Error("URL did not change to " + targetPath + " within " + timeout + "ms (current: " + window.location.hash + ")"));
         }
       }, 100);
     });
+  }
+
+  // Check for pending selection after page load (survives forced reload)
+  if (window.__gtm_monitor_pending_selection) {
+    var pending = window.__gtm_monitor_pending_selection;
+    delete window.__gtm_monitor_pending_selection;
+    log("Found pending selection from before reload, resuming...");
+    setTimeout(function () {
+      selectVariablesOnPage(pending.variableNames);
+    }, 2000);
   }
 
   async function selectVariablesOnPage(names) {
