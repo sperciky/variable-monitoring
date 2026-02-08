@@ -256,7 +256,7 @@ def _esc_js(text: str) -> str:
     return text.replace("\\", "\\\\").replace("'", "\\'").replace('"', '\\"')
 
 
-# JavaScript for clipboard copy — runs inside st.components.v1.html iframe
+# JavaScript for clipboard copy — runs inside st.html() auto-sizing iframe
 _COPY_JS = """\
 <script>
 function copyVar(text, el) {
@@ -281,32 +281,11 @@ function _ok(el) {
     el.textContent = '\\u2705';
     setTimeout(function(){ el.textContent = '\\ud83d\\udccb'; }, 1200);
 }
-// Auto-resize iframe to fit content
-(function(){
-    function resize(){
-        var h = document.body.scrollHeight;
-        if (h < 10) return;
-        try {
-            var frame = window.frameElement;
-            if (frame) {
-                frame.style.height = h + 'px';
-                // Streamlit wraps the iframe in a div — resize it too
-                if (frame.parentElement)
-                    frame.parentElement.style.height = h + 'px';
-            }
-        } catch(e){}
-    }
-    resize();
-    setTimeout(resize, 100);
-    setTimeout(resize, 300);
-    setTimeout(resize, 800);
-})();
 </script>"""
 
 
-def _render_copyable_html(body_html: str, fallback_height: int = 200):
-    """Render HTML with working copy-to-clipboard JS via an iframe component."""
-    import streamlit.components.v1 as stc
+def _render_copyable_html(body_html: str):
+    """Render HTML with working copy-to-clipboard JS via st.html (auto-sizing iframe)."""
     page = (
         '<html><head><style>'
         'body{font-family:"Source Sans Pro",sans-serif;font-size:14px;'
@@ -315,7 +294,7 @@ def _render_copyable_html(body_html: str, fallback_height: int = 200):
         f'{body_html}{_COPY_JS}'
         '</body></html>'
     )
-    stc.html(page, height=fallback_height, scrolling=False)
+    st.html(page)
 
 
 def _copy_span(name: str) -> str:
@@ -412,7 +391,7 @@ def render_dashboard(data: dict):
                 items_html = "<ul style='padding-left:20px;'>" + "".join(
                     _make_copyable_item(item) for item in rec["items"]
                 ) + "</ul>"
-                _render_copyable_html(items_html, fallback_height=len(rec["items"]) * 28 + 10)
+                _render_copyable_html(items_html)
 
     # ---- Charts ----
     st.markdown("## Variable Evaluation Impact")
@@ -508,7 +487,7 @@ def render_dashboard(data: dict):
                 f'</tr>'
             )
         tbl += '</tbody></table>'
-        _render_copyable_html(tbl, fallback_height=len(unused_vars) * 28 + 40)
+        _render_copyable_html(tbl)
 
     # ---- Duplicate variables detail ----
     duplicates = data.get("duplicate_variables", {})
@@ -539,7 +518,7 @@ def render_dashboard(data: dict):
                         f'<thead><tr style="border-bottom:2px solid #ddd;">{header}</tr></thead>'
                         f'<tbody>{rows}</tbody></table>'
                     )
-                    _render_copyable_html(tbl, fallback_height=len(group) * 28 + 40)
+                    _render_copyable_html(tbl)
 
     # ---- Download JSON report ----
     st.markdown("---")
