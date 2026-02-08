@@ -154,6 +154,24 @@ function extractFormatValueInfo(fv) {
   return Object.keys(info).length ? info : null;
 }
 
+// Build a stable string fragment for the default-value portion of a grouping key.
+// Variables with different setDefaultValue/defaultValue settings are NOT duplicates.
+function defaultValueKeyPart(keyInfo) {
+  if (keyInfo.setDefaultValue === "true" || keyInfo.setDefaultValue === true) {
+    return `|dv:${keyInfo.defaultValue || ""}`;
+  }
+  return "|dv:none";
+}
+
+// Build a stable string fragment for the formatValue portion of a grouping key.
+// Variables with different formatValue settings are NOT duplicates.
+function formatValueKeyPart(formatInfo) {
+  if (!formatInfo) return "|fv:none";
+  // Sort keys for deterministic output
+  const parts = Object.keys(formatInfo).sort().map(k => `${k}=${formatInfo[k]}`);
+  return `|fv:${parts.join(";")}`;
+}
+
 function findDuplicateVariables(cv) {
   const variables = cv.variable || [];
 
@@ -173,21 +191,24 @@ function findDuplicateVariables(cv) {
     let key = null;
     let extra = {};
 
+    const dvPart = defaultValueKeyPart(keyInfo);
+    const fvPart = formatValueKeyPart(formatInfo);
+
     if (varType === "v" && "name" in keyInfo) {
       category = "data_layer_duplicates";
-      key = `datalayer|${keyInfo.name}|v${keyInfo.dataLayerVersion || "2"}`;
+      key = `datalayer|${keyInfo.name}|v${keyInfo.dataLayerVersion || "2"}${dvPart}${fvPart}`;
       extra = { path: keyInfo.name, version: keyInfo.dataLayerVersion || "2", defaultValue: keyInfo.defaultValue || "" };
     } else if (varType === "ed" && "keyPath" in keyInfo) {
       category = "event_data_duplicates";
-      key = `eventdata|${keyInfo.keyPath}`;
+      key = `eventdata|${keyInfo.keyPath}${dvPart}${fvPart}`;
       extra = { keyPath: keyInfo.keyPath, defaultValue: keyInfo.defaultValue || "" };
     } else if (varType === "k" && "name" in keyInfo) {
       category = "cookie_duplicates";
-      key = `cookie|${keyInfo.name}`;
+      key = `cookie|${keyInfo.name}${dvPart}${fvPart}`;
       extra = { cookieName: keyInfo.name };
     } else if (varType === "j" && "name" in keyInfo) {
       category = "js_variable_duplicates";
-      key = `jsvar|${keyInfo.name}`;
+      key = `jsvar|${keyInfo.name}${dvPart}${fvPart}`;
       extra = { jsVarName: keyInfo.name };
     } else if (varType === "u") {
       category = "url_duplicates";
@@ -195,11 +216,11 @@ function findDuplicateVariables(cv) {
       const queryKey = keyInfo.queryKey || "";
       const customUrlSource = keyInfo.customUrlSource || "";
       if (queryKey) {
-        key = `url|${component}|${queryKey}`;
+        key = `url|${component}|${queryKey}${dvPart}${fvPart}`;
       } else if (customUrlSource) {
-        key = `url|${component}|${customUrlSource}`;
+        key = `url|${component}|${customUrlSource}${dvPart}${fvPart}`;
       } else {
-        key = `url|${component}`;
+        key = `url|${component}${dvPart}${fvPart}`;
       }
       extra = { component, queryKey };
     } else if (varType && varType.startsWith("cvt_")) {
@@ -209,7 +230,7 @@ function findDuplicateVariables(cv) {
       }
       if (templateKeyParams.length) {
         category = "custom_template_duplicates";
-        key = `custom|${varType}|${templateKeyParams.sort().join("|")}`;
+        key = `custom|${varType}|${templateKeyParams.sort().join("|")}${dvPart}${fvPart}`;
         extra = { parameters: keyInfo };
       }
     }
