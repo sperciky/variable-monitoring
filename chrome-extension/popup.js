@@ -49,6 +49,93 @@ async function ensureContentScripts(tabId) {
   }
 }
 
+// ---- Recover pending exports directly from MAIN world buffer --------
+// Reads and clears window.__gtm_monitor_pending_exports via executeScript,
+// bypassing the ISOLATED world entirely. This is the most reliable way
+// to recover exports that were intercepted while no content script was alive.
+async function recoverPendingExports(tabId) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      world: "MAIN",
+      func: () => {
+        const pending = window.__gtm_monitor_pending_exports || [];
+        window.__gtm_monitor_pending_exports = [];
+        // Return only what we need (containerData is a JSON string, meta is small)
+        return pending.map(msg => ({
+          containerData: msg.containerData,
+          meta: msg.meta,
+        }));
+      },
+    });
+
+    const pendingExports = results && results[0] && results[0].result;
+    if (!pendingExports || pendingExports.length === 0) {
+      console.log("No pending exports in MAIN world buffer");
+      return;
+    }
+
+    console.log("Recovered", pendingExports.length, "pending exports from MAIN world buffer");
+
+    const storageResult = await chrome.storage.local.get({ exportHistory: [] });
+    const history = storageResult.exportHistory;
+
+    for (const item of pendingExports) {
+      const containerData = JSON.parse(item.containerData);
+      const meta = item.meta || {};
+      const label = buildExportLabel(meta, containerData);
+
+      const entry = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        label: label,
+        accountId: meta.accountId || "",
+        containerId: meta.containerId || "",
+        sourceType: meta.sourceType || "",
+        sourceId: meta.sourceId || "",
+        workspaceName: meta.workspaceName || "",
+        timestamp: Date.now(),
+        containerData: containerData,
+      };
+
+      // Remove existing entry for same container+workspace
+      const idx = history.findIndex(h =>
+        h.accountId === entry.accountId &&
+        h.containerId === entry.containerId &&
+        h.sourceType === entry.sourceType &&
+        h.sourceId === entry.sourceId
+      );
+      if (idx >= 0) history.splice(idx, 1);
+      history.unshift(entry);
+    }
+
+    if (history.length > 20) history.length = 20;
+    await chrome.storage.local.set({ exportHistory: history });
+    console.log("Pending exports stored. History size:", history.length);
+  } catch (err) {
+    console.warn("Failed to recover pending exports:", err.message);
+  }
+}
+
+// ---- Build label (same logic as content.js buildLabel) ---------------
+function buildExportLabel(meta, containerData) {
+  const parts = [];
+  if (meta.workspaceName) {
+    parts.push(meta.workspaceName);
+  } else if (meta.sourceType === "versions") {
+    parts.push("Version " + meta.sourceId);
+  } else if (meta.sourceType === "workspaces") {
+    parts.push("Workspace " + meta.sourceId);
+  }
+  const cv = containerData && containerData.containerVersion;
+  const containerName = cv && cv.container && cv.container.name;
+  if (containerName) {
+    parts.push(containerName);
+  } else if (meta.containerId) {
+    parts.push("CTR-" + meta.containerId);
+  }
+  return parts.length > 0 ? parts.join(" | ") : "Export";
+}
+
 // ---- Init -----------------------------------------------------------
 (async function init() {
   // Restore enabled state
@@ -88,11 +175,11 @@ async function ensureContentScripts(tabId) {
   // Ensure content scripts are alive on the GTM tab
   if (currentTab && gtmParams) {
     await ensureContentScripts(currentTab.id);
+    // Directly read and store any pending exports from MAIN world buffer
+    await recoverPendingExports(currentTab.id);
   }
 
-  // Load export history (after ensuring scripts, so flushed exports are available)
-  // Small delay to let flush complete if scripts were just injected
-  await new Promise(r => setTimeout(r, 500));
+  // Load export history
   await loadExportHistory();
 
   // If we have a cached analysis result for this container, show it
