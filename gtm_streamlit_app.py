@@ -266,6 +266,58 @@ def run_analysis(file_bytes: bytes, include_paused: bool) -> dict:
 # ---------------------------------------------------------------------------
 # Dashboard rendering
 # ---------------------------------------------------------------------------
+def _esc_html(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _esc_js(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("'", "\\'").replace('"', '\\"')
+
+
+def _copy_span(name: str) -> str:
+    """Render a variable name with an inline copy-to-clipboard icon."""
+    h = _esc_html(name)
+    j = _esc_js(name)
+    clipboard_icon = "\U0001f4cb"
+    return (
+        f'<code style="background:#f0f2f6;padding:1px 6px;border-radius:4px;font-size:0.9em;">{h}</code>'
+        f'<span onclick="navigator.clipboard.writeText(\'{j}\');'
+        f"this.textContent='\\u2705';setTimeout(()=>this.textContent='\\ud83d\\udccb',1200)\""
+        f' style="cursor:pointer;margin-left:3px;font-size:0.9em;user-select:none;" '
+        f'title="Copy variable name">{clipboard_icon}</span>'
+    )
+
+
+def _make_copyable_item(item_text: str) -> str:
+    """Convert a recommendation list item to HTML with copy icons next to variable names."""
+    import re as _re
+
+    # Pattern: "VarName (ID: 123, Type: v)" — unused vars / templates
+    m = _re.match(r'^(.+?)\s*\(ID:\s*', item_text)
+    if m:
+        name = m.group(1).strip()
+        rest = _esc_html(item_text[len(name):])
+        return f"<li>{_copy_span(name)}{rest}</li>"
+
+    # Pattern: "Type: name1, name2, name3" — duplicate groups
+    m = _re.match(r'^([^:]+):\s*(.+)$', item_text)
+    if m and ", " in m.group(2):
+        prefix = _esc_html(m.group(1))
+        names = [n.strip() for n in m.group(2).split(",")]
+        names_html = ", ".join(_copy_span(n) for n in names)
+        return f"<li>{prefix}: {names_html}</li>"
+
+    # Pattern: "name (N evaluations)" — high-impact vars
+    m = _re.match(r'^(.+?)\s*\(\d+\s+evaluations?\)', item_text)
+    if m:
+        name = m.group(1).strip()
+        rest = _esc_html(item_text[len(name):])
+        return f"<li>{_copy_span(name)}{rest}</li>"
+
+    # Fallback — plain text (e.g. "... and N more", architectural advice)
+    return f"<li>{_esc_html(item_text)}</li>"
+
+
 def render_dashboard(data: dict):
     summary = data.get("summary", {})
     trigger_impact = data.get("trigger_evaluation_impact", {})
@@ -314,9 +366,10 @@ def render_dashboard(data: dict):
             icon = {"HIGH": "\U0001f534", "MEDIUM": "\U0001f7e0", "LOW": "\U0001f535"}[rec["priority"]]
             with st.expander(f"{icon} [{rec['priority']}] {rec['title']} \u2014 {rec['impact']}", expanded=True):
                 st.write(rec.get("action", ""))
-                # Render items as a scrollable list
-                items_md = "\n".join(f"- {item}" for item in rec["items"])
-                st.markdown(items_md)
+                items_html = "<ul style='padding-left:20px;'>" + "".join(
+                    _make_copyable_item(item) for item in rec["items"]
+                ) + "</ul>"
+                st.markdown(items_html, unsafe_allow_html=True)
 
     # ---- Charts ----
     st.markdown("## Variable Evaluation Impact")
@@ -393,10 +446,26 @@ def render_dashboard(data: dict):
     unused_vars = data.get("unused_variables", [])
     if unused_vars:
         st.markdown("## Unused Variables Detail")
-        df_unused = pd.DataFrame(unused_vars)
-        if "type" in df_unused.columns:
-            df_unused["type_name"] = df_unused["type"].apply(get_variable_type_name)
-        st.dataframe(df_unused, hide_index=True, use_container_width=True)
+        # Build HTML table with copy icons next to variable names
+        tbl = (
+            '<table style="width:100%;border-collapse:collapse;font-size:0.9em;">'
+            '<thead><tr style="border-bottom:2px solid #ddd;text-align:left;">'
+            '<th style="padding:6px;">Name</th>'
+            '<th style="padding:6px;">Variable ID</th>'
+            '<th style="padding:6px;">Type</th>'
+            '</tr></thead><tbody>'
+        )
+        for v in unused_vars:
+            type_name = get_variable_type_name(v.get("type", ""))
+            tbl += (
+                f'<tr style="border-bottom:1px solid #eee;">'
+                f'<td style="padding:6px;">{_copy_span(v["name"])}</td>'
+                f'<td style="padding:6px;">{_esc_html(str(v.get("variableId", "")))}</td>'
+                f'<td style="padding:6px;">{_esc_html(type_name)}</td>'
+                f'</tr>'
+            )
+        tbl += '</tbody></table>'
+        st.markdown(tbl, unsafe_allow_html=True)
 
     # ---- Duplicate variables detail ----
     duplicates = data.get("duplicate_variables", {})
@@ -409,7 +478,25 @@ def render_dashboard(data: dict):
             clean_type = dup_type.replace("_duplicates", "").replace("_", " ").title()
             for i, group in enumerate(groups, 1):
                 with st.expander(f"{clean_type} \u2014 Group {i}: {', '.join(v['name'] for v in group)}", expanded=True):
-                    st.dataframe(pd.DataFrame(group), hide_index=True, use_container_width=True)
+                    # Build HTML table with copy icons
+                    cols = [k for k in group[0].keys() if k != "formatValue"]
+                    header = "".join(f'<th style="padding:6px;text-align:left;">{_esc_html(c)}</th>' for c in cols)
+                    rows = ""
+                    for v in group:
+                        cells = ""
+                        for c in cols:
+                            val = v.get(c, "")
+                            if c == "name":
+                                cells += f'<td style="padding:6px;">{_copy_span(str(val))}</td>'
+                            else:
+                                cells += f'<td style="padding:6px;">{_esc_html(str(val))}</td>'
+                        rows += f'<tr style="border-bottom:1px solid #eee;">{cells}</tr>'
+                    tbl = (
+                        f'<table style="width:100%;border-collapse:collapse;font-size:0.9em;">'
+                        f'<thead><tr style="border-bottom:2px solid #ddd;">{header}</tr></thead>'
+                        f'<tbody>{rows}</tbody></table>'
+                    )
+                    st.markdown(tbl, unsafe_allow_html=True)
 
     # ---- Download JSON report ----
     st.markdown("---")
