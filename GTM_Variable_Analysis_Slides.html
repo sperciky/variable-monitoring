@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTM Variable Analysis & Optimization</title>
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.3.1/dist/reset.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.3.1/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.3.1/dist/theme/white.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.3.1/plugin/highlight/monokai.css">
+    
+    <style>
+        .reveal h1, .reveal h2, .reveal h3 {
+            color: #2c3e50;
+        }
+        .reveal .slides section .fragment.highlight-red {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .reveal .slides section .fragment.highlight-green {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .stat-box {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 10px;
+            display: inline-block;
+        }
+        .stat-number {
+            font-size: 2em;
+            color: #3498db;
+            font-weight: bold;
+        }
+        .priority-high {
+            background-color: #fee;
+            border-left: 5px solid #e74c3c;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .priority-medium {
+            background-color: #fff3cd;
+            border-left: 5px solid #f39c12;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .priority-low {
+            background-color: #e3f2fd;
+            border-left: 5px solid #3498db;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .code-small {
+            font-size: 0.7em;
+        }
+        .emoji {
+            font-size: 1.5em;
+            vertical-align: middle;
+        }
+        .reveal pre code {
+            max-height: 500px;
+        }
+        .two-column {
+            display: flex;
+            justify-content: space-between;
+        }
+        .column {
+            flex: 1;
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+            
+            <!-- Title Slide -->
+            <section data-background-color="#34495e">
+                <h1 style="color: white;">GTM Variable Analysis</h1>
+                <h3 style="color: #ecf0f1;">Finding Dependencies, Duplicates, and Performance Bottlenecks</h3>
+                <p style="color: #bdc3c7;">A 20-minute guide to container optimization</p>
+                <p style="color: #95a5a6; font-size: 0.8em;">Press SPACE to navigate →</p>
+            </section>
+
+            <!-- Agenda -->
+            <section>
+                <h2>Agenda</h2>
+                <ol>
+                    <li class="fragment">The Problem: GTM Container Bloat <span class="emoji">🎯</span></li>
+                    <li class="fragment">Understanding GTM Export Structure <span class="emoji">🔍</span></li>
+                    <li class="fragment">Analysis Approach & Algorithms <span class="emoji">🛠️</span></li>
+                    <li class="fragment">Results Dashboard & Insights <span class="emoji">📊</span></li>
+                    <li class="fragment">Optimization Strategies <span class="emoji">💡</span></li>
+                    <li class="fragment">Live Demo & Tools <span class="emoji">🚀</span></li>
+                </ol>
+            </section>
+
+            <!-- Part 1: The Problem -->
+            <section>
+                <section>
+                    <h2>The Hidden Cost of Variable Bloat</h2>
+                    <div class="fragment">
+                        <div class="stat-box">
+                            <div class="stat-number">23%</div>
+                            <div>Unused Variables</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-number">400+</div>
+                            <div>Re-evaluations/page</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-number">50-200ms</div>
+                            <div>Load Time Impact</div>
+                        </div>
+                    </div>
+                </section>
+
+                <section>
+                    <h3>Real Container Example</h3>
+                    <pre><code class="language-javascript" data-trim>
+// Actual container statistics:
+{
+    "total_variables": 150,
+    "unused_variables": 35,  // 23% waste!
+    "duplicate_groups": 12,
+    "total_evaluations": 1770,
+    "container_size": "487KB"
+}
+                    </code></pre>
+                    <p class="fragment highlight-red">Every unused variable adds complexity and slows performance</p>
+                </section>
+
+                <section>
+                    <h3>Why This Matters</h3>
+                    <div class="two-column">
+                        <div class="column">
+                            <h4>Performance Impact</h4>
+                            <ul>
+                                <li class="fragment">Slower page loads</li>
+                                <li class="fragment">Higher CPU usage</li>
+                                <li class="fragment">Mobile performance issues</li>
+                            </ul>
+                        </div>
+                        <div class="column">
+                            <h4>Maintenance Cost</h4>
+                            <ul>
+                                <li class="fragment">Harder debugging</li>
+                                <li class="fragment">Increased errors</li>
+                                <li class="fragment">Team confusion</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <!-- Part 2: GTM Structure -->
+            <section>
+                <section>
+                    <h2>Understanding GTM Export Structure</h2>
+                    <pre><code class="language-json" data-trim>
+{
+  "containerVersion": {
+    "variable": [...],       // All variables defined
+    "tag": [...],           // All tags
+    "trigger": [...],       // All triggers  
+    "customTemplate": [...], // Custom templates
+    "client": [...],        // SGTM clients
+    "transformation": [...]  // SGTM transformations
+  }
+}
+                    </code></pre>
+                </section>
+
+                <section>
+                    <h3>How Variables are Referenced</h3>
+                    <p>The Magic Pattern: <code>{{Variable Name}}</code></p>
+                    <pre><code class="language-json code-small" data-trim>
+{
+  "name": "GA4 - Purchase Event",
+  "type": "gaawe",
+  "parameter": [
+    {
+      "key": "eventName",
+      "value": "purchase"
+    },
+    {
+      "key": "eventParameters",
+      "list": [
+        {
+          "key": "value",
+          "value": "{{Purchase Value}}"  // Variable reference!
+        },
+        {
+          "key": "currency", 
+          "value": "{{Currency Code}}"   // Another reference!
+        }
+      ]
+    }
+  ]
+}
+                    </code></pre>
+                </section>
+
+                <section>
+                    <h3>Hidden Variable References</h3>
+                    <div class="fragment">
+                        <h4>1. Custom JavaScript</h4>
+                        <pre><code class="language-javascript code-small">
+function() {
+  var pageType = {{Page Type}};  // Hidden in code!
+  return pageType === 'product' ? {{Product ID}} : undefined;
+}
+                        </code></pre>
+                    </div>
+                    <div class="fragment">
+                        <h4>2. Custom Templates</h4>
+                        <pre><code class="language-javascript code-small">
+// Inside templateData string
+const value = data.gtmTagId || {{Container ID}};
+                        </code></pre>
+                    </div>
+                    <div class="fragment">
+                        <h4>3. Default Values</h4>
+                        <pre><code class="language-json code-small">
+"defaultValue": "{{Fallback Value}}"
+                        </code></pre>
+                    </div>
+                </section>
+            </section>
+
+            <!-- Part 3: Analysis Approach -->
+            <section>
+                <section>
+                    <h2>Analysis Approach</h2>
+                    <h3>Step 1: Recursive Variable Detection</h3>
+                    <pre><code class="language-python" data-trim>
+def find_variable_references(obj):
+    """Recursively find all {{Variable}} patterns"""
+    if isinstance(obj, str):
+        # Extract variable references
+        return re.findall(r'\{\{([^}]+)\}\}', obj)
+    elif isinstance(obj, dict):
+        # Check all dictionary values
+        for value in obj.values():
+            find_variable_references(value)
+    elif isinstance(obj, list):
+        # Check all list items
+        for item in obj:
+            find_variable_references(item)
+                    </code></pre>
+                </section>
+
+                <section>
+                    <h3>Step 2: Usage Mapping</h3>
+                    <pre><code class="language-python code-small" data-trim>
+usage_map = {
+  "Page URL": {
+    "tags": ["GA4 - Page View", "GA4 - Scroll", "GA4 - Click"],
+    "triggers": ["All Pages", "Product Pages", "Cart Page"],  
+    "variables": ["Page Path", "Page Category"],
+    "total_references": 23,
+    "evaluation_contexts": 5
+  },
+  "User ID": {
+    "tags": ["GA4 - User Properties"],
+    "triggers": [],
+    "variables": ["User Status", "User Segment"],
+    "total_references": 7,
+    "evaluation_contexts": 3
+  }
+}
+                    </code></pre>
+                    <p class="fragment">Every component using a variable is tracked!</p>
+                </section>
+
+                <section>
+                    <h3>Step 3: Re-evaluation Analysis</h3>
+                    <div class="fragment">
+                        <h4>Trigger Evaluations</h4>
+                        <pre><code class="code-small">
+Variable in trigger → Evaluated for EVERY tag using that trigger
+
+Example: {{Page Type}} in "Product Pages" trigger
+         → 15 tags use this trigger
+         → Variable evaluated 15 times per event!
+                        </code></pre>
+                    </div>
+                    <div class="fragment">
+                        <h4>Tag Evaluations</h4>
+                        <pre><code class="code-small">
+Direct usage + Transformations + Custom Templates
+
+Example: {{User ID}} 
+         → Used in 5 tags directly
+         → Used in 2 transformations
+         → Total: 7 evaluations
+                        </code></pre>
+                    </div>
+                </section>
+
+                <section>
+                    <h3>Step 4: Duplicate Detection</h3>
+                    <pre><code class="language-javascript code-small" data-trim>
+// These are duplicates - same data source!
+{
+  "Cookie - User ID": {
+    "type": "k",  // Cookie type
+    "parameter": [{
+      "key": "name",
+      "value": "uid"  // Same cookie!
+    }]
+  },
+  "User Cookie": {
+    "type": "k",
+    "parameter": [{
+      "key": "name", 
+      "value": "uid"  // Same cookie!
+    }]
+  }
+}
+                    </code></pre>
+                    <p class="fragment highlight-red">Why maintain 2 variables for the same data?</p>
+                </section>
+            </section>
+
+            <!-- Part 4: Dashboard Results -->
+            <section>
+                <section data-background-color="#ecf0f1">
+                    <h2>Analysis Dashboard</h2>
+                    <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAwIiBoZWlnaHQ9IjYwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxyZWN0IHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIiBmaWxsPSIjZmZmIiBzdHJva2U9IiNkZGQiLz4KICAgIDwhLS0gSGVhZGVyIC0tPgogICAgPHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjgwMCIgaGVpZ2h0PSI4MCIgZmlsbD0iIzM0NDk1ZSIvPgogICAgPHRleHQgeD0iNDAwIiB5PSI0NSIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkdUTSBDb250YWluZXIgQW5hbHlzaXMgRGFzaGJvYXJkPC90ZXh0PgogICAgCiAgICA8IS0tIFN0YXRzIEJveGVzIC0tPgogICAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjAsIDEwMCkiPgogICAgICAgIDxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIxODAiIGhlaWdodD0iODAiIGZpbGw9IiNlY2YwZjEiIHJ4PSI1Ii8+CiAgICAgICAgPHRleHQgeD0iOTAiIHk9IjMwIiBmb250LXNpemU9IjI0IiBmb250LXdlaWdodD0iYm9sZCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+MTUwPC90ZXh0PgogICAgICAgIDx0ZXh0IHg9IjkwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+VG90YWwgVmFyaWFibGVzPC90ZXh0PgogICAgPC9nPgogICAgCiAgICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyMjAsIDEwMCkiPgogICAgICAgIDxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIxODAiIGhlaWdodD0iODAiIGZpbGw9IiNmZWUiIHJ4PSI1Ii8+CiAgICAgICAgPHRleHQgeD0iOTAiIHk9IjMwIiBmb250LXNpemU9IjI0IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iI2U3NGMzYyIgdGV4dC1hbmNob3I9Im1pZGRsZSI+MzU8L3RleHQ+CiAgICAgICAgPHRleHQgeD0iOTAiIHk9IjU1IiBmb250LXNpemU9IjE0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5VbnVzZWQgKDIzJSk8L3RleHQ+CiAgICA8L2c+CiAgICAKICAgIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDQyMCwgMTAwKSI+CiAgICAgICAgPHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjE4MCIgaGVpZ2h0PSI4MCIgZmlsbD0iI2ZmZjNjZCIgcng9IjUiLz4KICAgICAgICA8dGV4dCB4PSI5MCIgeT0iMzAiIGZvbnQtc2l6ZT0iMjQiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSIjZjM5YzEyIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj4xMjwvdGV4dD4KICAgICAgICA8dGV4dCB4PSI5MCIgeT0iNTUiIGZvbnQtc2l6ZT0iMTQiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkR1cGxpY2F0ZXM8L3RleHQ+CiAgICA8L2c+CiAgICAKICAgIDwhLS0gSGVhbHRoIFNjb3JlIC0tPgogICAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNjIwLCAxMDApIj4KICAgICAgICA8cmVjdCB4PSIwIiB5PSIwIiB3aWR0aD0iMTYwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjZThmOGY1IiByeD0iNSIvPgogICAgICAgIDx0ZXh0IHg9IjgwIiB5PSIyNSIgZm9udC1zaXplPSIxNCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+SGVhbHRoIFNjb3JlPC90ZXh0PgogICAgICAgIDx0ZXh0IHg9IjgwIiB5PSI1NSIgZm9udC1zaXplPSIyOCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiMyN2FlNjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiPjcyLzEwMDwvdGV4dD4KICAgIDwvZz4KICAgIAogICAgPCEtLSBDaGFydCBBcmVhIC0tPgogICAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjAsIDIyMCkiPgogICAgICAgIDxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIzNjAiIGhlaWdodD0iMjAwIiBmaWxsPSIjZjhmOWZhIiBzdHJva2U9IiNkZGQiLz4KICAgICAgICA8dGV4dCB4PSIxODAiIHk9IjI1IiBmb250LXNpemU9IjE2IiBmb250LXdlaWdodD0iYm9sZCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+VG9wIEV2YWx1YXRlZCBWYXJpYWJsZXM8L3RleHQ+CiAgICAgICAgPCEtLSBCYXJzIC0tPgogICAgICAgIDxyZWN0IHg9IjMwIiB5PSI1MCIgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMCIgZmlsbD0iIzM0OThkYiIvPgogICAgICAgIDx0ZXh0IHg9IjI0MCIgeT0iNjUiIGZvbnQtc2l6ZT0iMTIiPjQzNiBldmFsczwvdGV4dD4KICAgICAgICA8cmVjdCB4PSIzMCIgeT0iODAiIHdpZHRoPSIxODAiIGhlaWdodD0iMjAiIGZpbGw9IiMzNDk4ZGIiLz4KICAgICAgICA8dGV4dCB4PSIyMjAiIHk9Ijk1IiBmb250LXNpemU9IjEyIj4yMjUgZXZhbHM8L3RleHQ+CiAgICAgICAgPHJlY3QgeD0iMzAiIHk9IjExMCIgd2lkdGg9IjE2MCIgaGVpZ2h0PSIyMCIgZmlsbD0iIzM0OThkYiIvPgogICAgICAgIDx0ZXh0IHg9IjIwMCIgeT0iMTI1IiBmb250LXNpemU9IjEyIj4yMTIgZXZhbHM8L3RleHQ+CiAgICA8L2c+CiAgICAKICAgIDwhLS0gUmVjb21tZW5kYXRpb25zIC0tPgogICAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNDAwLCAyMjApIj4KICAgICAgICA8cmVjdCB4PSIwIiB5PSIwIiB3aWR0aD0iMzgwIiBoZWlnaHQ9IjM1MCIgZmlsbD0iI2ZmZiIgc3Ryb2tlPSIjZGRkIi8+CiAgICAgICAgPHRleHQgeD0iMTkwIiB5PSIyNSIgZm9udC1zaXplPSIxNiIgZm9udC13ZWlnaHQ9ImJvbGQiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlJlY29tbWVuZGF0aW9uczwvdGV4dD4KICAgICAgICA8IS0tIEhpZ2ggLS0+CiAgICAgICAgPHJlY3QgeD0iMjAiIHk9IjUwIiB3aWR0aD0iMzQwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjZmVlIiBzdHJva2U9IiNlNzRjM2MiLz4KICAgICAgICA8dGV4dCB4PSIzMCIgeT0iNzAiIGZvbnQtc2l6ZT0iMTQiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSIjYzAzOTJiIj5ISUdIOiBSZW1vdmUgMzUgVW51c2VkIFZhcmlhYmxlczwvdGV4dD4KICAgICAgICA8dGV4dCB4PSIzMCIgeT0iOTAiIGZvbnQtc2l6ZT0iMTIiPkltcGFjdDogMjAlIGNvbnRhaW5lciBzaXplIHJlZHVjdGlvbjwvdGV4dD4KICAgICAgICA8dGV4dCB4PSIzMCIgeT0iMTEwIiBmb250LXNpemU9IjEyIj5TYWZlIHRvIHJlbW92ZSBpbW1lZGlhdGVseTwvdGV4dD4KICAgICAgICA8IS0tIE1lZGl1bSAtLT4KICAgICAgICA8cmVjdCB4PSIyMCIgeT0iMTUwIiB3aWR0aD0iMzQwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjZmZmM2NkIiBzdHJva2U9IiNmMzljMTIiLz4KICAgICAgICA8dGV4dCB4PSIzMCIgeT0iMTcwIiBmb250LXNpemU9IjE0IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iI2Q2OGExMCI+TUVESVVNOiBDb25zb2xpZGF0ZSAxMiBEdXBsaWNhdGVzPC90ZXh0PgogICAgICAgIDx0ZXh0IHg9IjMwIiB5PSIxOTAiIGZvbnQtc2l6ZT0iMTIiPkltcGFjdDogUmVkdWNlIHJlLWV2YWx1YXRpb25zPC90ZXh0PgogICAgICAgIDx0ZXh0IHg9IjMwIiB5PSIyMTAiIGZvbnQtc2l6ZT0iMTIiPlJldmlldyBiZWZvcmUgbWVyZ2luZzwvdGV4dD4KICAgIDwvZz4KPC9zdmc+" alt="Dashboard Screenshot" style="width: 100%; border: 1px solid #ddd;">
+                    <p>Static HTML dashboard - no server required!</p>
+                </section>
+
+                <section>
+                    <h3>Key Metrics</h3>
+                    <div class="stat-box">
+                        <div>Container Health Score</div>
+                        <div class="stat-number">72/100</div>
+                    </div>
+                    <div class="fragment">
+                        <h4>Score Calculation</h4>
+                        <ul>
+                            <li>Base: 100 points</li>
+                            <li>-1 point per unused variable</li>
+                            <li>-2 points per duplicate group</li>
+                            <li>-10 points if >300 variables</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <section>
+                    <h3>Actionable Recommendations</h3>
+                    <div class="priority-high">
+                        <strong>HIGH Priority:</strong> Remove 35 Unused Variables
+                        <ul>
+                            <li>Page Title (ID: 123)</li>
+                            <li>Old Campaign ID (ID: 456)</li>
+                            <li>Deprecated User ID (ID: 789)</li>
+                            <li>... and 32 more</li>
+                        </ul>
+                    </div>
+                    <div class="priority-medium fragment">
+                        <strong>MEDIUM Priority:</strong> Consolidate 12 Duplicates
+                        <ul>
+                            <li>3 variables reading 'uid' cookie</li>
+                            <li>2 variables for page URL</li>
+                            <li>... review and merge</li>
+                        </ul>
+                    </div>
+                </section>
+            </section>
+
+            <!-- Part 5: Optimization -->
+            <section>
+                <section>
+                    <h2>Optimization Strategies</h2>
+                </section>
+
+                <section>
+                    <h3>1. Safe Variable Removal Process</h3>
+                    <ol>
+                        <li class="fragment">Export container backup</li>
+                        <li class="fragment">Remove variables with 0 references</li>
+                        <li class="fragment">Test in Preview mode</li>
+                        <li class="fragment">Publish with confidence</li>
+                    </ol>
+                    <p class="fragment highlight-green">Result: 20-30% container size reduction</p>
+                </section>
+
+                <section>
+                    <h3>2. Caching Heavy Variables</h3>
+                    <h4>Before: Re-evaluated 400+ times</h4>
+                    <pre><code class="language-javascript code-small" data-trim>
+function() {
+    // Complex calculation every time
+    const userData = parseUserData();
+    const segment = calculateSegment(userData);
+    return segment;
+}
+                    </code></pre>
+                    <h4 class="fragment">After: Evaluated once, cached</h4>
+                    <pre class="fragment"><code class="language-javascript code-small" data-trim>
+function() {
+    if (!window._gtmCache) window._gtmCache = {};
+    
+    if (!window._gtmCache.userSegment) {
+        const userData = parseUserData();
+        window._gtmCache.userSegment = calculateSegment(userData);
+    }
+    
+    return window._gtmCache.userSegment;
+}
+                    </code></pre>
+                    <p class="fragment highlight-green">Performance gain: 10-50ms per page</p>
+                </section>
+
+                <section>
+                    <h3>3. Duplicate Consolidation</h3>
+                    <div class="two-column">
+                        <div class="column">
+                            <h4>Before</h4>
+                            <pre><code class="code-small">
+Variable 1: Cookie - UID
+Variable 2: User Cookie  
+Variable 3: User ID Cookie
+
+All reading same 'uid' cookie
+                            </code></pre>
+                        </div>
+                        <div class="column fragment">
+                            <h4>After</h4>
+                            <pre><code class="code-small">
+Variable: User ID
+
+Referenced by all tags/triggers
+67% reduction in cookie reads
+                            </code></pre>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <!-- Demo Section -->
+            <section>
+                <section>
+                    <h2>Tools & Demo</h2>
+                    <h3>Three Python Scripts</h3>
+                    <ol>
+                        <li><code>gtm-analyzer.py</code> - Core analysis engine</li>
+                        <li><code>gtm_dashboard_static.py</code> - Dashboard generator</li>
+                        <li><code>gtm_dependency_graph.py</code> - Network visualization</li>
+                    </ol>
+                </section>
+
+                <section>
+                    <h3>Quick Demo</h3>
+                    <pre><code class="language-bash" data-trim>
+# 1. Export your GTM container as JSON
+
+# 2. Run the analysis
+python gtm-analyzer.py container_export.json
+
+# 3. Generate static dashboard  
+python gtm_dashboard_static.py container_export_analysis_report.json
+
+# 4. Open in browser
+# File: gtm_dashboard_container_export.html
+                    </code></pre>
+                    <p class="fragment">Total time: &lt; 1 minute for complete analysis</p>
+                </section>
+
+                <section>
+                    <h3>Expected Results</h3>
+                    <div class="fragment">
+                        <div class="stat-box">
+                            <div class="stat-number">20-30%</div>
+                            <div>Container Size Reduction</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-number">50-200ms</div>
+                            <div>Faster Page Loads</div>
+                        </div>
+                    </div>
+                    <div class="fragment">
+                        <h4>Plus:</h4>
+                        <ul>
+                            <li>Easier debugging</li>
+                            <li>Clearer documentation</li>
+                            <li>Reduced error risk</li>
+                        </ul>
+                    </div>
+                </section>
+            </section>
+
+            <!-- Summary -->
+            <section data-background-color="#27ae60">
+                <h2 style="color: white;">Key Takeaways</h2>
+                <ol style="color: white;">
+                    <li class="fragment">23% unused variables is common - you're not alone!</li>
+                    <li class="fragment">Every variable has a performance cost</li>
+                    <li class="fragment">Automated analysis makes cleanup safe</li>
+                    <li class="fragment">Small optimizations = big performance gains</li>
+                    <li class="fragment">Regular audits prevent future bloat</li>
+                </ol>
+                <h3 class="fragment" style="color: #ecf0f1;">Start your analysis today!</h3>
+            </section>
+
+            <!-- Q&A -->
+            <section data-background-color="#34495e">
+                <h1 style="color: white;">Questions?</h1>
+                <div style="color: #ecf0f1;">
+                    <p>Tools available at:</p>
+                    <p><code>github.com/your-repo/gtm-analyzer</code></p>
+                    <br>
+                    <p>Contact:</p>
+                    <p><code>your-email@company.com</code></p>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.3.1/dist/reveal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.3.1/plugin/highlight/highlight.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.3.1/plugin/notes/notes.js"></script>
+    <script>
+        Reveal.initialize({
+            hash: true,
+            controls: true,
+            progress: true,
+            center: true,
+            transition: 'slide',
+            
+            plugins: [ RevealHighlight, RevealNotes ]
+        });
+        
+        // Add slide numbers
+        Reveal.configure({ 
+            slideNumber: 'c/t',
+            showSlideNumber: 'all' 
+        });
+    </script>
+</body>
+</html>

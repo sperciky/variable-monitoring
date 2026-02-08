@@ -1,0 +1,135 @@
+GTM TAG COMPLEXITY ANALYSIS REPORT
+================================================================================
+
+EXECUTIVE SUMMARY
+----------------------------------------
+Total Tags Analyzed: 54
+Total Unique Variables: 245
+Average Variables per Tag: 25.9
+Average Total Evaluations per Tag: 60.2
+
+TOP 10 MOST COMPLEX TAGS (by total evaluations)
+----------------------------------------
+GA4 - NEW - purchase
+  Type: Google Analytics: GA4
+  Total Evaluations: 238
+  Unique Variables: 45
+  Average Usage per Variable: 5.29
+
+MPv2 - send mpv2 hits - CZ/SK Mobile
+  Type: Custom Template Tag
+  Total Evaluations: 234
+  Unique Variables: 38
+  Average Usage per Variable: 6.16
+
+GA4 - Purchase CZ
+  Type: Google Analytics: GA4
+  Total Evaluations: 226
+  Unique Variables: 47
+  Average Usage per Variable: 4.81
+
+MPv2 - send mpv1 hits - Mobile CZ
+  Type: Custom Template Tag
+  Total Evaluations: 205
+  Unique Variables: 50
+  Average Usage per Variable: 4.10
+
+GA4 - Purchase SK
+  Type: Google Analytics: GA4
+  Total Evaluations: 204
+  Unique Variables: 44
+  Average Usage per Variable: 4.64
+
+MPv2 - send mpv1 hits - Mobile SK
+  Type: Custom Template Tag
+  Total Evaluations: 204
+  Unique Variables: 49
+  Average Usage per Variable: 4.16
+
+FB conversion BG - backend
+  Type: Custom Template Tag
+  Total Evaluations: 73
+  Unique Variables: 34
+  Average Usage per Variable: 2.15
+
+FB conversion SI/HR/RS/BA - backend
+  Type: Custom Template Tag
+  Total Evaluations: 70
+  Unique Variables: 40
+  Average Usage per Variable: 1.75
+
+TikTok - HU/RO - rozdelene - Event - Complete Payment
+  Type: Custom Template Tag
+  Total Evaluations: 70
+  Unique Variables: 33
+  Average Usage per Variable: 2.12
+
+TikTok - CZ - rozdelene - Event - Complete Payment
+  Type: Custom Template Tag
+  Total Evaluations: 70
+  Unique Variables: 33
+  Average Usage per Variable: 2.12
+
+
+MOST COMMONLY USED VARIABLES
+----------------------------------------
+LT - UA/GA4 MAIN MEASUREMENT ID > domain
+  Used in 44 tags
+  Total usage count: 141
+
+LT - GA4 TEST MEASUREMENT ID > domain
+  Used in 44 tags
+  Total usage count: 141
+
+UA/GA4 ID
+  Used in 44 tags
+  Total usage count: 436
+
+'client_id'
+  Used in 41 tags
+  Total usage count: 225
+
+= Firestore - FB - save path
+  Used in 41 tags
+  Total usage count: 107
+
+'page_hostname'
+  Used in 41 tags
+  Total usage count: 107
+
+Event Name
+  Used in 41 tags
+  Total usage count: 212
+
+= undefined
+  Used in 40 tags
+  Total usage count: 163
+
+RT - Firestore - FB - path
+  Used in 38 tags
+  Total usage count: 104
+
+LT - Firestore - FB - path
+  Used in 38 tags
+  Total usage count: 104
+
+ED - value
+  Used in 34 tags
+  Total usage count: 35
+
+UA - transaction revenue 'x-ga-mp1-tr'
+  Used in 29 tags
+  Total usage count: 29
+
+ED - page_location
+  Used in 24 tags
+  Total usage count: 55
+
+ED - transaction_id
+  Used in 18 tags
+  Total usage count: 21
+
+get Main domain from page_location (Frontend)
+  Used in 17 tags
+  Total usage count: 31
+

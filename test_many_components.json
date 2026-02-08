@@ -1,0 +1,110 @@
+{
+  "containerVersion": {
+    "accountId": "12345",
+    "containerId": "67890",
+    "containerVersionId": "1",
+    "variable": [
+      {
+        "accountId": "12345",
+        "containerId": "67890",
+        "variableId": "1",
+        "name": "Page URL",
+        "type": "u",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "component",
+            "value": "URL"
+          }
+        ]
+      }
+    ],
+    "tag": [
+      {
+        "accountId": "12345",
+        "containerId": "67890",
+        "tagId": "1",
+        "name": "GA4 - Page View",
+        "type": "gaawe",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "page_location",
+            "value": "{{Page URL}}"
+          }
+        ]
+      },
+      {
+        "accountId": "12345",
+        "containerId": "67890",
+        "tagId": "2",
+        "name": "GA4 - Scroll",
+        "type": "gaawe",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "page_location",
+            "value": "{{Page URL}}"
+          }
+        ]
+      },
+      {
+        "accountId": "12345",
+        "containerId": "67890",
+        "tagId": "3",
+        "name": "GA4 - Time on Page",
+        "type": "gaawe",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "page_location",
+            "value": "{{Page URL}}"
+          }
+        ]
+      },
+      {
+        "accountId": "12345",
+        "containerId": "67890",
+        "tagId": "4",
+        "name": "GA4 - Click",
+        "type": "gaawe",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "page_location",
+            "value": "{{Page URL}}"
+          }
+        ]
+      },
+      {
+        "accountId": "12345",
+        "containerId": "67890",
+        "tagId": "5",
+        "name": "GA4 - Form Submit",
+        "type": "gaawe",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "page_location",
+            "value": "{{Page URL}}"
+          }
+        ]
+      },
+      {
+        "accountId": "12345",
+        "containerId": "67890",
+        "tagId": "6",
+        "name": "GA4 - Video Play",
+        "type": "gaawe",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "page_location",
+            "value": "{{Page URL}}"
+          }
+        ]
+      }
+    ],
+    "trigger": []
+  }
+}
