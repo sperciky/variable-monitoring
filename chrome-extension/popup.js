@@ -399,6 +399,13 @@ function renderResults(result) {
   // Show/hide "Select Unused Variables" button
   if (unusedVariables.length > 0) {
     $resActs.classList.remove("hidden");
+    if (!isOnGtmPage()) {
+      $btnSelUnused.disabled = true;
+      $btnSelUnused.title = "Navigate to tagmanager.google.com first";
+    } else {
+      $btnSelUnused.disabled = false;
+      $btnSelUnused.title = "";
+    }
   } else {
     $resActs.classList.add("hidden");
   }
@@ -529,9 +536,20 @@ function renderUnusedTemplates(tpls) {
   attachCopyListeners($el);
 }
 
+// ---- Check if current tab is a GTM page -----------------------------
+function isOnGtmPage() {
+  return currentTab && currentTab.url &&
+    currentTab.url.includes("tagmanager.google.com");
+}
+
 // ---- Select Unused Variables in GTM ---------------------------------
 $btnSelUnused.addEventListener("click", async () => {
   if (!analysisResult || !analysisResult.unusedVariables.length) return;
+
+  if (!isOnGtmPage()) {
+    setStatus("Navigate to tagmanager.google.com first, then click this button", "error");
+    return;
+  }
 
   const entry = getSelectedEntry();
   if (!entry || !entry.accountId || !entry.containerId || !entry.sourceId) {
