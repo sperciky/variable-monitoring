@@ -60,6 +60,7 @@ body.detached {
 .toggle input:checked + .toggle__slider::after { transform: translateX(16px); }
 
 .toggle--small { width: 28px; height: 16px; margin-left: auto; }
+.toggle--small .toggle__slider { background: #dadce0; }
 .toggle--small .toggle__slider::after { width: 12px; height: 12px; }
 .toggle--small input:checked + .toggle__slider::after { transform: translateX(12px); }
 .action-bar__label { font-size: 11px; color: #5f6368; user-select: none; }
