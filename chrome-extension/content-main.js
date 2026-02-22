@@ -403,17 +403,17 @@
         continue;
       }
       var allValue = allOption.value;
+      var allIndex = allOption.index;
 
       if (select.value === allValue) {
         log("Pagination select", si, "already ALL");
         continue;
       }
 
-      log("Pagination select", si, ": changing from", select.value, "to", allValue);
+      log("Pagination select", si, ": current value='" + select.value + "', target='" + allValue + "', optionIndex=" + allIndex);
       anyChanged = true;
 
-      // Try AngularJS scope first
-      var scopeWorked = false;
+      // Approach 1: AngularJS scope.$apply
       if (typeof angular !== "undefined") {
         try {
           var scope = angular.element(select).scope();
@@ -422,28 +422,53 @@
               scope.ctrl.itemsPerPage = "ALL";
               scope.ctrl.onPageSizeSelect();
             });
-            log("Pagination select", si, ": AngularJS scope.$apply executed");
-            scopeWorked = true;
+            log("Pagination select", si, ": scope.$apply done, select.value now='" + select.value + "'");
           }
         } catch (e) {
-          warn("Pagination select", si, ": AngularJS scope failed:", e.message);
+          warn("Pagination select", si, ": scope.$apply failed:", e.message);
         }
       }
 
-      // DOM fallback
-      if (!scopeWorked) {
-        allOption.selected = true;
-        select.value = allValue;
-        select.dispatchEvent(new Event("input", { bubbles: true }));
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-        log("Pagination select", si, ": DOM fallback applied");
+      // Approach 2: AngularJS ngModel $setViewValue
+      if (select.value !== allValue && typeof angular !== "undefined") {
+        try {
+          var ngModelCtrl = angular.element(select).controller("ngModel");
+          if (ngModelCtrl) {
+            ngModelCtrl.$setViewValue("ALL");
+            ngModelCtrl.$render();
+            log("Pagination select", si, ": ngModel.$setViewValue done, select.value now='" + select.value + "'");
+          }
+        } catch (e) {
+          warn("Pagination select", si, ": ngModel approach failed:", e.message);
+        }
       }
+
+      // Approach 3: Direct DOM manipulation + change event
+      if (select.value !== allValue) {
+        select.selectedIndex = allIndex;
+        select.value = allValue;
+        allOption.selected = true;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        log("Pagination select", si, ": DOM selectedIndex + change event, select.value now='" + select.value + "'");
+      }
+
+      // Approach 4: jQuery-style trigger if Angular's jqLite is available
+      if (select.value !== allValue && typeof angular !== "undefined") {
+        try {
+          angular.element(select).val(allValue).triggerHandler("change");
+          log("Pagination select", si, ": angular.element triggerHandler, select.value now='" + select.value + "'");
+        } catch (e) {
+          warn("Pagination select", si, ": triggerHandler failed:", e.message);
+        }
+      }
+
+      log("Pagination select", si, ": final value='" + select.value + "'");
     }
 
     if (anyChanged) {
       // Wait for Angular to re-render all rows
       log("Waiting for rows to re-render after pagination change...");
-      await new Promise(function (r) { setTimeout(r, 1500); });
+      await new Promise(function (r) { setTimeout(r, 2000); });
       var rowsAfter = document.querySelectorAll("tr[gtm-table-row]").length;
       log("Rows after pagination change:", rowsBefore, "→", rowsAfter);
     }
