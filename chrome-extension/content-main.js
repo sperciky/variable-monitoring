@@ -359,12 +359,19 @@
 
   function setPaginationToAll() {
     return new Promise(function (resolve) {
-      const select = document.querySelector("gtm-pagination select");
+      // Try multiple selectors to find the pagination <select>
+      var select = document.querySelector("gtm-pagination select")
+        || document.querySelector(".gtm-pagination__select select");
       if (!select) { warn("Pagination select not found"); resolve(); return; }
 
-      if (select.value === "string:ALL") { log("Pagination already ALL"); resolve(); return; }
+      // Find the ALL option value — it may be "string:ALL" or just "ALL"
+      var allOption = select.querySelector('option[label="ALL"]')
+        || select.querySelector('option[value="string:ALL"]');
+      var allValue = allOption ? allOption.value : "string:ALL";
 
-      log("Setting pagination to ALL (current:", select.value, ")");
+      if (select.value === allValue) { log("Pagination already ALL"); resolve(); return; }
+
+      log("Setting pagination to ALL (current:", select.value, ", target:", allValue, ")");
 
       if (typeof angular !== "undefined") {
         try {
@@ -383,7 +390,8 @@
         }
       }
 
-      select.value = "string:ALL";
+      // DOM fallback: set the value and dispatch change event
+      select.value = allValue;
       select.dispatchEvent(new Event("change", { bubbles: true }));
       log("Pagination set via DOM event");
       setTimeout(resolve, 500);
