@@ -22,6 +22,7 @@ const $gtmWarn   = document.getElementById("gtm-warning");
 const $btnHelp   = document.getElementById("btn-help");
 const $tutorial  = document.getElementById("tutorial-overlay");
 const $btnCloseTut = document.getElementById("btn-close-tutorial");
+const $toggleLog = document.getElementById("toggle-logging");
 const panelIds   = ["unused-vars", "duplicates", "unused-tpl"];
 
 // ---- State ----------------------------------------------------------
@@ -150,6 +151,10 @@ function buildExportLabel(meta, containerData) {
   const { gtmMonitorEnabled = true } = await chrome.storage.local.get("gtmMonitorEnabled");
   $toggle.checked = gtmMonitorEnabled;
   applyEnabledState(gtmMonitorEnabled);
+
+  // Restore logging state (default: disabled)
+  const { gtmMonitorLogging = false } = await chrome.storage.local.get("gtmMonitorLogging");
+  $toggleLog.checked = gtmMonitorLogging;
 
   // Detect if we're running in a detached window (has search params)
   const params = new URLSearchParams(window.location.search);
@@ -321,6 +326,21 @@ function applyEnabledState(enabled) {
     $overlay.classList.remove("hidden");
   }
 }
+
+// ---- Logging toggle -------------------------------------------------
+$toggleLog.addEventListener("change", () => {
+  const on = $toggleLog.checked;
+  chrome.storage.local.set({ gtmMonitorLogging: on });
+  // Propagate to MAIN world via the active tab
+  if (currentTab) {
+    chrome.scripting.executeScript({
+      target: { tabId: currentTab.id },
+      world: "MAIN",
+      func: (enabled) => { window.__gtm_monitor_logging = enabled; },
+      args: [on],
+    }).catch(() => {});
+  }
+});
 
 // ---- Tutorial -------------------------------------------------------
 function openTutorial() {

@@ -9,13 +9,33 @@
 (function () {
   const TAG = "[GTM Monitor ISOLATED]";
   const MAX_EXPORTS = 20;
+  var _loggingEnabled = false;
+
+  function log() { if (!_loggingEnabled) return; console.log.apply(console, [TAG].concat(Array.prototype.slice.call(arguments))); }
+  function logWarn() { if (!_loggingEnabled) return; console.warn.apply(console, [TAG].concat(Array.prototype.slice.call(arguments))); }
 
   // Guard: after extension reload, old content scripts lose chrome API access
   function isContextValid() {
     try { return !!chrome.runtime.id; } catch (e) { return false; }
   }
 
-  console.log(TAG, "Content script loaded at", window.location.href);
+  // Initialize logging state from storage and propagate to MAIN world
+  if (isContextValid()) {
+    chrome.storage.local.get({ gtmMonitorLogging: false }, function (result) {
+      _loggingEnabled = result.gtmMonitorLogging;
+      // Set the flag in MAIN world so content-main.js can read it
+      window.postMessage({ type: "__gtm_monitor_set_logging", enabled: _loggingEnabled }, "*");
+    });
+    // Listen for runtime changes to logging toggle
+    chrome.storage.onChanged.addListener(function (changes) {
+      if (changes.gtmMonitorLogging) {
+        _loggingEnabled = changes.gtmMonitorLogging.newValue;
+        window.postMessage({ type: "__gtm_monitor_set_logging", enabled: _loggingEnabled }, "*");
+      }
+    });
+  }
+
+  log("Content script loaded at", window.location.href);
 
   // ---- URL param detection ------------------------------------------
   function detectParams() {
@@ -35,17 +55,17 @@
 
   const params = detectParams();
   if (params && isContextValid()) {
-    console.log(TAG, "GTM params detected:", params);
+    log("GTM params detected:", params);
     chrome.runtime.sendMessage({ type: "gtm-params-detected", params });
   } else if (!params) {
-    console.log(TAG, "No GTM params found in hash:", window.location.hash);
+    log("No GTM params found in hash:", window.location.hash);
   }
 
   window.addEventListener("hashchange", () => {
     if (!isContextValid()) return;
     const p = detectParams();
     if (p) {
-      console.log(TAG, "GTM params updated on hashchange:", p);
+      log("GTM params updated on hashchange:", p);
       chrome.runtime.sendMessage({ type: "gtm-params-detected", params: p });
     }
   });
@@ -55,14 +75,14 @@
     // Only accept messages from the same window (our MAIN world script)
     if (e.source !== window) return;
     if (!e.data || e.data.type !== "__gtm_monitor_export") return;
-    if (!isContextValid()) { console.warn(TAG, "Context invalidated, refresh the page"); return; }
+    if (!isContextValid()) { logWarn("Context invalidated, refresh the page"); return; }
 
-    console.log(TAG, "Received export data via postMessage, length:", (e.data.containerData || "").length);
+    log("Received export data via postMessage, length:", (e.data.containerData || "").length);
 
     try {
       const containerData = JSON.parse(e.data.containerData);
       const meta = e.data.meta || {};
-      console.log(TAG, "Parsed container data, meta:", meta);
+      log("Parsed container data, meta:", meta);
 
       // Build a label for this export
       const label = buildLabel(meta, containerData);
@@ -94,7 +114,7 @@
         if (history.length > MAX_EXPORTS) history.length = MAX_EXPORTS;
 
         chrome.storage.local.set({ exportHistory: history }, function () {
-          console.log(TAG, "Export stored. History size:", history.length);
+          log("Export stored. History size:", history.length);
         });
 
         // Notify popup (if open)
@@ -104,11 +124,11 @@
           label: entry.label,
           timestamp: entry.timestamp,
         }).catch(function () {
-          console.log(TAG, "Popup not open, will pick up data when opened");
+          log("Popup not open, will pick up data when opened");
         });
       });
     } catch (err) {
-      console.error(TAG, "Error processing export data:", err);
+      logWarn("Error processing export data:", err);
     }
   });
 
@@ -145,7 +165,7 @@
   if (isContextValid()) {
     chrome.runtime.onMessage.addListener(function (msg) {
       if (msg.type !== "navigate-and-select") return;
-      console.log(TAG, "navigate-and-select received, hash:", msg.hash,
+      log("navigate-and-select received, hash:", msg.hash,
         "variables:", msg.variableNames.length);
 
       // Relay to MAIN world — it will handle both navigation and selection
@@ -169,8 +189,8 @@
   // ---- Request pending exports from MAIN world buffer ---------------
   // If the MAIN world script intercepted exports while this ISOLATED
   // script was dead (extension reload), recover them now.
-  console.log(TAG, "Requesting pending exports from MAIN world buffer...");
+  log("Requesting pending exports from MAIN world buffer...");
   window.postMessage({ type: "__gtm_monitor_flush_pending" }, "*");
 
-  console.log(TAG, "All listeners registered, waiting for export data...");
+  log("All listeners registered, waiting for export data...");
 })();
