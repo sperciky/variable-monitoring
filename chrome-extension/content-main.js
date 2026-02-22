@@ -327,10 +327,15 @@
         if (sampleDomNames.length < 5) sampleDomNames.push(varName);
         if (nameSet.has(varName)) {
           nameMatches++;
-          const checkbox = row.querySelector("gtm-table-row-checkbox i");
+          // Try multiple selectors for the checkbox element
+          const checkbox = row.querySelector("gtm-table-row-checkbox i")
+            || row.querySelector("gtm-table-row-checkbox")
+            || row.querySelector(".gtm-check-box-icon")
+            || row.querySelector("td:first-child i")
+            || row.querySelector("td:first-child");
           if (!checkbox) {
             checkboxIssues++;
-            log("No checkbox <i> found for matched variable:", varName);
+            log("No checkbox element found for matched variable:", varName);
           } else {
             toClick.push(checkbox);
           }
@@ -357,45 +362,52 @@
     }
   }
 
-  function setPaginationToAll() {
-    return new Promise(function (resolve) {
-      // Try multiple selectors to find the pagination <select>
-      var select = document.querySelector("gtm-pagination select")
-        || document.querySelector(".gtm-pagination__select select");
-      if (!select) { warn("Pagination select not found"); resolve(); return; }
+  async function setPaginationToAll() {
+    // Wait for the pagination <select> to appear in the DOM (it may render after table rows)
+    var select;
+    try {
+      select = await waitForElement("gtm-pagination select, .gtm-pagination__select select", 10000);
+    } catch (e) {
+      warn("Pagination select not found within timeout");
+      return;
+    }
 
-      // Find the ALL option value — it may be "string:ALL" or just "ALL"
-      var allOption = select.querySelector('option[label="ALL"]')
-        || select.querySelector('option[value="string:ALL"]');
-      var allValue = allOption ? allOption.value : "string:ALL";
+    // Find the ALL option value — it may be "string:ALL" or just "ALL"
+    var allOption = select.querySelector('option[label="ALL"]')
+      || select.querySelector('option[value="string:ALL"]');
+    var allValue = allOption ? allOption.value : "string:ALL";
 
-      if (select.value === allValue) { log("Pagination already ALL"); resolve(); return; }
+    if (select.value === allValue) { log("Pagination already ALL"); return; }
 
-      log("Setting pagination to ALL (current:", select.value, ", target:", allValue, ")");
+    log("Setting pagination to ALL (current:", select.value, ", target:", allValue, ")");
 
-      if (typeof angular !== "undefined") {
-        try {
-          var scope = angular.element(select).scope();
-          if (scope && scope.ctrl) {
-            scope.$apply(function () {
-              scope.ctrl.itemsPerPage = "ALL";
-              scope.ctrl.onPageSizeSelect();
-            });
-            log("Pagination set via AngularJS scope");
-            setTimeout(resolve, 500);
-            return;
-          }
-        } catch (e) {
-          warn("AngularJS scope approach failed, using DOM fallback:", e);
+    var changed = false;
+    if (typeof angular !== "undefined") {
+      try {
+        var scope = angular.element(select).scope();
+        if (scope && scope.ctrl) {
+          scope.$apply(function () {
+            scope.ctrl.itemsPerPage = "ALL";
+            scope.ctrl.onPageSizeSelect();
+          });
+          log("Pagination set via AngularJS scope");
+          changed = true;
         }
+      } catch (e) {
+        warn("AngularJS scope approach failed, using DOM fallback:", e);
       }
+    }
 
+    if (!changed) {
       // DOM fallback: set the value and dispatch change event
       select.value = allValue;
       select.dispatchEvent(new Event("change", { bubbles: true }));
       log("Pagination set via DOM event");
-      setTimeout(resolve, 500);
-    });
+    }
+
+    // Wait for Angular to re-render all rows — row count should increase
+    log("Waiting for rows to re-render after pagination change...");
+    await new Promise(function (r) { setTimeout(r, 1000); });
   }
 
   function waitForElement(selector, timeout) {
