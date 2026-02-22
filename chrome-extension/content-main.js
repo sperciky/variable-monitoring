@@ -334,11 +334,14 @@
           continue;
         }
         nameMatches++;
-        // Log the first row's checkbox HTML structure to debug click target
-        if (nameMatches === 1) {
-          const cbContainer = row.querySelector("gtm-table-row-checkbox");
-          log("First checkbox container HTML:", cbContainer ? cbContainer.innerHTML.substring(0, 200) : "NO gtm-table-row-checkbox found");
-        }
+        // Log each row's checkbox structure for debugging
+        const cbContainer = row.querySelector("gtm-table-row-checkbox");
+        const cbTag = cbContainer ? cbContainer.tagName : "N/A";
+        const cbHTML = cbContainer ? cbContainer.innerHTML.substring(0, 300) : "NO gtm-table-row-checkbox";
+        const cbI = cbContainer ? cbContainer.querySelector("i") : null;
+        const cbIClass = cbI ? cbI.className : "N/A";
+        log("Checkbox for '" + name + "':", "container:", cbTag, "| <i> class:", cbIClass, "| HTML:", cbHTML);
+
         // Try multiple selectors for the checkbox element
         const checkbox = row.querySelector("gtm-table-row-checkbox i")
           || row.querySelector("gtm-table-row-checkbox")
@@ -375,80 +378,74 @@
   }
 
   async function setPaginationToAll() {
-    // Wait for the pagination <select> to appear in the DOM (it may render after table rows)
-    var select;
+    // Wait for at least one pagination <select> to appear in the DOM
     try {
-      select = await waitForElement("gtm-pagination select, .gtm-pagination__select select", 10000);
+      await waitForElement("gtm-pagination select, .gtm-pagination__select select", 10000);
     } catch (e) {
       warn("Pagination select not found within timeout");
       return;
     }
 
-    // Find the ALL option element
-    var allOption = select.querySelector('option[label="ALL"]')
-      || select.querySelector('option[value="string:ALL"]');
-    if (!allOption) { warn("ALL option not found in pagination select"); return; }
-    var allValue = allOption.value;
-
-    if (select.value === allValue) { log("Pagination already ALL"); return; }
+    // GTM has multiple pagination selects (user-defined vars, built-in vars, etc.)
+    // We must set ALL of them to "ALL"
+    var selects = document.querySelectorAll("gtm-pagination select, .gtm-pagination__select select");
+    log("Found", selects.length, "pagination select(s) on page");
 
     var rowsBefore = document.querySelectorAll("tr[gtm-table-row]").length;
-    log("Setting pagination to ALL (current:", select.value, ", target:", allValue, ", rows before:", rowsBefore, ")");
+    var anyChanged = false;
 
-    // Strategy 1: AngularJS scope
-    var angularWorked = false;
-    if (typeof angular !== "undefined") {
-      try {
-        var scope = angular.element(select).scope();
-        if (scope && scope.ctrl) {
-          scope.$apply(function () {
-            scope.ctrl.itemsPerPage = "ALL";
-            scope.ctrl.onPageSizeSelect();
-          });
-          log("AngularJS scope.$apply executed");
-          await new Promise(function (r) { setTimeout(r, 1000); });
-          var rowsAfter = document.querySelectorAll("tr[gtm-table-row]").length;
-          if (rowsAfter > rowsBefore) {
-            log("AngularJS scope worked, rows:", rowsBefore, "→", rowsAfter);
-            angularWorked = true;
-          } else {
-            log("AngularJS scope did NOT increase row count:", rowsBefore, "→", rowsAfter, "— trying DOM fallback");
+    for (var si = 0; si < selects.length; si++) {
+      var select = selects[si];
+      var allOption = select.querySelector('option[label="ALL"]')
+        || select.querySelector('option[value="string:ALL"]');
+      if (!allOption) {
+        log("Pagination select", si, "has no ALL option, skipping");
+        continue;
+      }
+      var allValue = allOption.value;
+
+      if (select.value === allValue) {
+        log("Pagination select", si, "already ALL");
+        continue;
+      }
+
+      log("Pagination select", si, ": changing from", select.value, "to", allValue);
+      anyChanged = true;
+
+      // Try AngularJS scope first
+      var scopeWorked = false;
+      if (typeof angular !== "undefined") {
+        try {
+          var scope = angular.element(select).scope();
+          if (scope && scope.ctrl) {
+            scope.$apply(function () {
+              scope.ctrl.itemsPerPage = "ALL";
+              scope.ctrl.onPageSizeSelect();
+            });
+            log("Pagination select", si, ": AngularJS scope.$apply executed");
+            scopeWorked = true;
           }
+        } catch (e) {
+          warn("Pagination select", si, ": AngularJS scope failed:", e.message);
         }
-      } catch (e) {
-        warn("AngularJS scope approach failed:", e);
+      }
+
+      // DOM fallback
+      if (!scopeWorked) {
+        allOption.selected = true;
+        select.value = allValue;
+        select.dispatchEvent(new Event("input", { bubbles: true }));
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        log("Pagination select", si, ": DOM fallback applied");
       }
     }
 
-    // Strategy 2: Set selectedIndex + trigger Angular's change detection
-    if (!angularWorked) {
-      allOption.selected = true;
-      select.value = allValue;
-      select.dispatchEvent(new Event("input", { bubbles: true }));
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-      log("DOM fallback: set select value + dispatched input+change events");
-      await new Promise(function (r) { setTimeout(r, 1000); });
-      var rowsAfterDom = document.querySelectorAll("tr[gtm-table-row]").length;
-      log("After DOM fallback, rows:", rowsBefore, "→", rowsAfterDom);
-    }
-
-    // Strategy 3: If rows still haven't increased, try triggering ng-change via Angular $apply
-    var rowsFinal = document.querySelectorAll("tr[gtm-table-row]").length;
-    if (rowsFinal <= rowsBefore && typeof angular !== "undefined") {
-      log("Rows still unchanged, trying angular.element(select).triggerHandler('change')...");
-      try {
-        angular.element(select).val(allValue);
-        angular.element(select).triggerHandler("change");
-        await new Promise(function (r) { setTimeout(r, 1000); });
-        rowsFinal = document.querySelectorAll("tr[gtm-table-row]").length;
-        log("After triggerHandler, rows:", rowsBefore, "→", rowsFinal);
-      } catch (e) {
-        warn("angular triggerHandler failed:", e);
-      }
-    }
-
-    if (rowsFinal <= rowsBefore) {
-      warn("Pagination change may not have worked — rows did not increase:", rowsBefore, "→", rowsFinal);
+    if (anyChanged) {
+      // Wait for Angular to re-render all rows
+      log("Waiting for rows to re-render after pagination change...");
+      await new Promise(function (r) { setTimeout(r, 1500); });
+      var rowsAfter = document.querySelectorAll("tr[gtm-table-row]").length;
+      log("Rows after pagination change:", rowsBefore, "→", rowsAfter);
     }
   }
 
