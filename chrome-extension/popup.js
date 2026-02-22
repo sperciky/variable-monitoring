@@ -257,6 +257,10 @@ function timeAgo(ts) {
 }
 
 function updateStatusFromSelection() {
+  if (!gtmParams) {
+    setStatus("Navigate to a GTM Admin section Export Container page first", "error");
+    return;
+  }
   const entry = getSelectedEntry();
   if (entry) {
     const age = timeAgo(entry.timestamp);
