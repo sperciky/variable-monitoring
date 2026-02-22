@@ -11,9 +11,10 @@
   const TAG = "[GTM Monitor MAIN]";
   var _scriptStart = performance.now();
   function _ts() { return "[" + Math.round(performance.now() - _scriptStart) + "ms]"; }
-  function log() { console.log.apply(console, [TAG, _ts()].concat(Array.prototype.slice.call(arguments))); }
-  function warn() { console.warn.apply(console, [TAG, _ts()].concat(Array.prototype.slice.call(arguments))); }
-  function err() { console.error.apply(console, [TAG, _ts()].concat(Array.prototype.slice.call(arguments))); }
+  function _loggingEnabled() { return !!window.__gtm_monitor_logging; }
+  function log() { if (!_loggingEnabled()) return; console.log.apply(console, [TAG, _ts()].concat(Array.prototype.slice.call(arguments))); }
+  function warn() { if (!_loggingEnabled()) return; console.warn.apply(console, [TAG, _ts()].concat(Array.prototype.slice.call(arguments))); }
+  function err() { if (!_loggingEnabled()) return; console.error.apply(console, [TAG, _ts()].concat(Array.prototype.slice.call(arguments))); }
 
   // ---- Prevent duplicate initialization -----------------------------
   if (window.__gtm_monitor_main_initialized) {
@@ -168,6 +169,11 @@
   window.addEventListener("message", function (e) {
     if (e.source !== window) return;
     if (!e.data) return;
+
+    if (e.data.type === "__gtm_monitor_set_logging") {
+      window.__gtm_monitor_logging = !!e.data.enabled;
+      return;
+    }
 
     if (e.data.type === "__gtm_monitor_flush_pending") {
       var pending = window.__gtm_monitor_pending_exports || [];
