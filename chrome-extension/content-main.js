@@ -384,16 +384,19 @@
       return;
     }
 
-    // Find the ALL option value — it may be "string:ALL" or just "ALL"
+    // Find the ALL option element
     var allOption = select.querySelector('option[label="ALL"]')
       || select.querySelector('option[value="string:ALL"]');
-    var allValue = allOption ? allOption.value : "string:ALL";
+    if (!allOption) { warn("ALL option not found in pagination select"); return; }
+    var allValue = allOption.value;
 
     if (select.value === allValue) { log("Pagination already ALL"); return; }
 
-    log("Setting pagination to ALL (current:", select.value, ", target:", allValue, ")");
+    var rowsBefore = document.querySelectorAll("tr[gtm-table-row]").length;
+    log("Setting pagination to ALL (current:", select.value, ", target:", allValue, ", rows before:", rowsBefore, ")");
 
-    var changed = false;
+    // Strategy 1: AngularJS scope
+    var angularWorked = false;
     if (typeof angular !== "undefined") {
       try {
         var scope = angular.element(select).scope();
@@ -402,24 +405,51 @@
             scope.ctrl.itemsPerPage = "ALL";
             scope.ctrl.onPageSizeSelect();
           });
-          log("Pagination set via AngularJS scope");
-          changed = true;
+          log("AngularJS scope.$apply executed");
+          await new Promise(function (r) { setTimeout(r, 1000); });
+          var rowsAfter = document.querySelectorAll("tr[gtm-table-row]").length;
+          if (rowsAfter > rowsBefore) {
+            log("AngularJS scope worked, rows:", rowsBefore, "→", rowsAfter);
+            angularWorked = true;
+          } else {
+            log("AngularJS scope did NOT increase row count:", rowsBefore, "→", rowsAfter, "— trying DOM fallback");
+          }
         }
       } catch (e) {
-        warn("AngularJS scope approach failed, using DOM fallback:", e);
+        warn("AngularJS scope approach failed:", e);
       }
     }
 
-    if (!changed) {
-      // DOM fallback: set the value and dispatch change event
+    // Strategy 2: Set selectedIndex + trigger Angular's change detection
+    if (!angularWorked) {
+      allOption.selected = true;
       select.value = allValue;
+      select.dispatchEvent(new Event("input", { bubbles: true }));
       select.dispatchEvent(new Event("change", { bubbles: true }));
-      log("Pagination set via DOM event");
+      log("DOM fallback: set select value + dispatched input+change events");
+      await new Promise(function (r) { setTimeout(r, 1000); });
+      var rowsAfterDom = document.querySelectorAll("tr[gtm-table-row]").length;
+      log("After DOM fallback, rows:", rowsBefore, "→", rowsAfterDom);
     }
 
-    // Wait for Angular to re-render all rows — row count should increase
-    log("Waiting for rows to re-render after pagination change...");
-    await new Promise(function (r) { setTimeout(r, 1000); });
+    // Strategy 3: If rows still haven't increased, try triggering ng-change via Angular $apply
+    var rowsFinal = document.querySelectorAll("tr[gtm-table-row]").length;
+    if (rowsFinal <= rowsBefore && typeof angular !== "undefined") {
+      log("Rows still unchanged, trying angular.element(select).triggerHandler('change')...");
+      try {
+        angular.element(select).val(allValue);
+        angular.element(select).triggerHandler("change");
+        await new Promise(function (r) { setTimeout(r, 1000); });
+        rowsFinal = document.querySelectorAll("tr[gtm-table-row]").length;
+        log("After triggerHandler, rows:", rowsBefore, "→", rowsFinal);
+      } catch (e) {
+        warn("angular triggerHandler failed:", e);
+      }
+    }
+
+    if (rowsFinal <= rowsBefore) {
+      warn("Pagination change may not have worked — rows did not increase:", rowsBefore, "→", rowsFinal);
+    }
   }
 
   function waitForElement(selector, timeout) {
