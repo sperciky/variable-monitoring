@@ -310,50 +310,62 @@
       const totalRows = await waitForStableRowCount(8000);
       log("Row count stabilized at", totalRows);
 
-      // 4. Collect all checkboxes to click, then click in batches
-      log("Finding checkboxes to click...");
-      log("Target variable names:", Array.from(nameSet).slice(0, 5), "... (" + nameSet.size + " total)");
-      const toClick = [];
+      // 4. Build a map of DOM variable names for matching
       const rows = document.querySelectorAll("tr[gtm-table-row]");
-      var rowsWithLink = 0;
-      var nameMatches = 0;
-      var checkboxIssues = 0;
-      var sampleDomNames = [];
+      const domNameMap = new Map(); // varName → row
       for (const row of rows) {
         const nameLink = row.querySelector("a.wd-variable-name");
         if (!nameLink) continue;
-        rowsWithLink++;
         const varName = nameLink.textContent.trim();
-        if (sampleDomNames.length < 5) sampleDomNames.push(varName);
-        if (nameSet.has(varName)) {
-          nameMatches++;
-          // Try multiple selectors for the checkbox element
-          const checkbox = row.querySelector("gtm-table-row-checkbox i")
-            || row.querySelector("gtm-table-row-checkbox")
-            || row.querySelector(".gtm-check-box-icon")
-            || row.querySelector("td:first-child i")
-            || row.querySelector("td:first-child");
-          if (!checkbox) {
-            checkboxIssues++;
-            log("No checkbox element found for matched variable:", varName);
-          } else {
-            toClick.push(checkbox);
-          }
+        domNameMap.set(varName, row);
+      }
+      log("DOM variables found:", domNameMap.size, "of", rows.length, "rows");
+
+      // 5. Match target names against DOM and collect checkboxes to click
+      log("Finding checkboxes to click...");
+      const toClick = [];
+      var nameMatches = 0;
+      var checkboxIssues = 0;
+      const notFound = [];
+      for (const name of nameSet) {
+        const row = domNameMap.get(name);
+        if (!row) {
+          notFound.push(name);
+          continue;
+        }
+        nameMatches++;
+        // Log the first row's checkbox HTML structure to debug click target
+        if (nameMatches === 1) {
+          const cbContainer = row.querySelector("gtm-table-row-checkbox");
+          log("First checkbox container HTML:", cbContainer ? cbContainer.innerHTML.substring(0, 200) : "NO gtm-table-row-checkbox found");
+        }
+        // Try multiple selectors for the checkbox element
+        const checkbox = row.querySelector("gtm-table-row-checkbox i")
+          || row.querySelector("gtm-table-row-checkbox")
+          || row.querySelector(".gtm-check-box-icon")
+          || row.querySelector("td:first-child i")
+          || row.querySelector("td:first-child");
+        if (!checkbox) {
+          checkboxIssues++;
+          log("No checkbox element found for matched variable:", name);
+        } else {
+          toClick.push({ el: checkbox, name: name });
         }
       }
-      log("Rows with a.wd-variable-name:", rowsWithLink, "of", rows.length);
-      log("Sample DOM variable names:", sampleDomNames);
+      if (notFound.length > 0) {
+        log("NOT FOUND in DOM (" + notFound.length + "):", notFound);
+      }
       log("Name matches:", nameMatches, "Checkbox issues:", checkboxIssues);
       log("Found", toClick.length, "checkboxes to click");
 
-      // Click in batches of 10 with a small yield between batches
+      // 6. Click in batches of 10 with a small yield between batches
       const BATCH = 10;
       for (let i = 0; i < toClick.length; i += BATCH) {
         for (let j = i; j < Math.min(i + BATCH, toClick.length); j++) {
-          toClick[j].click();
+          toClick[j].el.click();
         }
         if (i + BATCH < toClick.length) {
-          await new Promise(function (r) { setTimeout(r, 0); });
+          await new Promise(function (r) { setTimeout(r, 50); });
         }
       }
       log("DONE — Selected", toClick.length, "of", names.length, "unused variables");
