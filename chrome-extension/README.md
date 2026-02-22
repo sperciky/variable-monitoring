@@ -29,6 +29,9 @@ Pop the extension out into a standalone window to keep analysis results visible 
 ### Tutorial
 Built-in 8-step visual guide accessible via the **?** button in the header.
 
+### Console Logging
+A toggle switch in the action bar enables or disables detailed console logging for all content scripts. Logging is **off by default** to keep the browser console clean. Turn it on when debugging interception or variable selection issues.
+
 ## Installation
 
 1. Clone or download this repository
